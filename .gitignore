@@ -1,0 +1,33 @@
+# Secrets — never commit
+.env
+.env.local
+*.key
+*.secret
+
+# Real data / PII — fixtures hold real correspondence
+/fixtures/*
+!/fixtures/README.md
+
+# Local runtime state (live client/project map, contacts, watermarks, feedback)
+/state/
+*.watermark
+
+# Generated output (digests, todo files, state-review)
+/out/
+
+# Ground-truth evaluation set (may contain real correspondence)
+/eval/*
+!/eval/README.md
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+node_modules/
+dist/
+build/
+
+# uv / venv
+.venv/

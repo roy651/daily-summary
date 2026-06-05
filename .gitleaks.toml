@@ -1,0 +1,16 @@
+[extend]
+# Keep all ~160 built-in gitleaks rules active; add project-specific rules below.
+useDefault = true
+
+# IMAP / SMTP app password used for reading the mailbox and sending the digest.
+# Fires on any non-placeholder value (entropy >= 3.5) assigned to *_APP_PASSWORD.
+[[rules]]
+id = "imap-app-password"
+description = "IMAP/SMTP app password"
+regex = '''(?i)(IMAP|SMTP)_APP_PASSWORD\s*[=:]\s*["']?([A-Za-z0-9_\-]{8,})["']?'''
+secretGroup = 2
+entropy = 3.5
+
+[rules.allowlist]
+description = "placeholder values from .env.example"
+regexes = ['''(?i)^replace_me$''']

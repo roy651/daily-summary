@@ -1,0 +1,32 @@
+[project]
+name = "daily-summary"
+version = "0.1.0"
+description = "Read-only daily business digest for a freelance design studio: conditions the day's mail and reasons out project status, important updates, and a prioritized TODO list."
+requires-python = ">=3.11"
+dependencies = [
+    "python-dotenv>=1.0",
+    "mail-evidence",
+]
+
+[project.optional-dependencies]
+# Phase-2: headless reasoning via the Anthropic API. Not needed for the file-backend MVP.
+api = ["anthropic>=0.40"]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.0",
+    "pytest>=8.0",
+]
+
+# mail-evidence is consumed as an editable path dependency from the sibling repo.
+# Designing toward extracting it to a standalone shared lib; when that happens, only
+# this source entry changes. NEVER add a daily-summary import into mail-evidence.
+[tool.uv.sources]
+mail-evidence = { path = "../private/invoicing-assistant/skills/mail-evidence", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["digest/tests"]
+pythonpath = ["digest"]
+
+[tool.ruff]
+target-version = "py311"
