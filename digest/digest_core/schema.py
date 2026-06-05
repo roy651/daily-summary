@@ -11,10 +11,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from digest_core.state import (
+    DEADLINE_KINDS,
     PROJECT_STATUSES,
     Blocker,
     Todo,
     _check,
+    _check_optional,
+    _require,
 )
 
 CONFIDENCES = frozenset({"high", "med", "low"})
@@ -30,7 +33,8 @@ class ProjectUpdate:
     status_evidence: str = ""
     confidence: str | None = None
     evidence_thread_ids: list[str] = field(default_factory=list)
-    blockers: list[Blocker] = field(default_factory=list)
+    # None = field omitted (keep existing blockers); [] = explicitly clear them (F6).
+    blockers: list[Blocker] | None = None
     todos: list[Todo] = field(default_factory=list)
     deadline: str | None = None
     deadline_kind: str | None = None
@@ -55,13 +59,17 @@ class ProjectUpdate:
         confidence = d.get("confidence")
         if confidence is not None:
             _check(confidence, CONFIDENCES, "confidence")
+        _check_optional(d.get("deadline_kind"), DEADLINE_KINDS, "deadline_kind")
+        blockers = (
+            [Blocker.from_dict(b) for b in d["blockers"]] if "blockers" in d else None
+        )
         return cls(
             project_id=project_id,
             status_agent=status_agent,
             status_evidence=d.get("status_evidence", ""),
             confidence=confidence,
             evidence_thread_ids=list(d.get("evidence_thread_ids", [])),
-            blockers=[Blocker.from_dict(b) for b in d.get("blockers", [])],
+            blockers=blockers,
             todos=[Todo.from_dict(t) for t in d.get("todos", [])],
             deadline=d.get("deadline"),
             deadline_kind=d.get("deadline_kind"),
@@ -85,7 +93,7 @@ class DigestUpdate:
         importance = d.get("importance", "med")
         _check(importance, IMPORTANCES, "importance")
         return cls(
-            headline=d["headline"],
+            headline=_require(d, "headline", "digest_update"),
             detail=d.get("detail", ""),
             importance=importance,
             project_id=d.get("project_id"),
@@ -99,7 +107,9 @@ class Unresolved:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Unresolved:
-        return cls(thread_id=d["thread_id"], why=d.get("why", ""))
+        return cls(
+            thread_id=_require(d, "thread_id", "unresolved"), why=d.get("why", "")
+        )
 
 
 @dataclass

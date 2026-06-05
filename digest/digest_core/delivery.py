@@ -101,7 +101,8 @@ class EmailDelivery:
         msg["To"] = recipient
         msg["Subject"] = subject
         msg.set_content(body)
-        with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port) as smtp:
+        # Timeout so a scheduled/unattended run can't hang forever on a stuck SMTP connection (F9).
+        with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=30) as smtp:
             smtp.login(self.user, self.password)
             smtp.send_message(msg)
 

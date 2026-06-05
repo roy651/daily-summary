@@ -11,6 +11,7 @@ multi-source streams are unified.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import date
 
 from mail_evidence import (
     ContactStore,
@@ -41,6 +42,27 @@ def condition_records(
         if kept is not None:
             survivors.append(kept)
     return survivors
+
+
+def window_records(
+    records: list[EvidenceRecord],
+    *,
+    since: str | None = None,
+    until: str | None = None,
+) -> list[EvidenceRecord]:
+    """Filter records to the date window [since, until) (ISO YYYY-MM-DD bounds, either optional).
+
+    Used to feed one month at a time from a large offline export — the monthly chunking that keeps
+    each bootstrap/accumulate reasoning pass tractable.
+    """
+    lo = date.fromisoformat(since) if since else None
+    hi = date.fromisoformat(until) if until else None
+    out = records
+    if lo is not None:
+        out = [r for r in out if r.date.date() >= lo]
+    if hi is not None:
+        out = [r for r in out if r.date.date() < hi]
+    return out
 
 
 def direction_of(record: EvidenceRecord, self_addresses: Iterable[str]) -> str:

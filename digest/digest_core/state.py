@@ -28,6 +28,7 @@ TODO_CATEGORIES = frozenset({"self", "verify_subcontractor", "communicate_client
 PROJECT_STATUSES = frozenset({"active", "on_hold", "blocked", "done", "archived"})
 TASK_STATUSES = frozenset({"active", "on_hold", "blocked", "done"})
 OWNERS = frozenset({"self", "subcontractor", "client_action"})
+DEADLINE_KINDS = frozenset({"hard", "soft"})
 BLOCKER_KINDS = frozenset(
     {
         "awaiting_client_material",
@@ -45,6 +46,20 @@ def _check(value: str, allowed: frozenset[str], field_name: str) -> None:
         raise ValueError(
             f"invalid {field_name}: {value!r} (allowed: {sorted(allowed)})"
         )
+
+
+def _check_optional(
+    value: str | None, allowed: frozenset[str], field_name: str
+) -> None:
+    if value is not None:
+        _check(value, allowed, field_name)
+
+
+def _require(d: dict[str, Any], key: str, ctx: str) -> Any:
+    """Fetch a required field, failing loudly (and by name) — never an opaque KeyError."""
+    if key not in d or d[key] in (None, ""):
+        raise ValueError(f"{ctx}: missing required field {key!r}")
+    return d[key]
 
 
 # ── leaf shapes ──────────────────────────────────────────────────────────────────
@@ -198,13 +213,14 @@ class Project:
     def __post_init__(self) -> None:
         _check(self.status, PROJECT_STATUSES, "project status")
         _check(self.assignee, OWNERS, "project assignee")
+        _check_optional(self.deadline_kind, DEADLINE_KINDS, "project deadline_kind")
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Project:
         return cls(
-            project_id=d["project_id"],
-            client_id=d["client_id"],
-            title=d["title"],
+            project_id=_require(d, "project_id", "project"),
+            client_id=_require(d, "client_id", "project"),
+            title=_require(d, "title", "project"),
             description=d.get("description", ""),
             end_client=d.get("end_client"),
             assignee=d.get("assignee", "self"),

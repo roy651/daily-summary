@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from mail_evidence import Thread
 from mail_evidence.records import EvidenceRecord
 
-from digest_core.evidence import direction_of, unify
+from digest_core.evidence import direction_of, unify, window_records
 
 SELF = {"avigail@ula.example"}
 
@@ -68,6 +68,19 @@ def test_unify_drops_threads_emptied_by_filter():
 def test_direction_inbound_vs_outbound():
     assert direction_of(_rec("m1", 3, "agent@sprig.example"), SELF) == "inbound"
     assert direction_of(_rec("m2", 3, "avigail@ula.example"), SELF) == "outbound"
+
+
+def test_window_records_filters_by_date():
+    recs = [
+        _rec("m1", 1, "a@x.example"),
+        _rec("m2", 15, "a@x.example"),
+        _rec("m3", 28, "a@x.example"),
+    ]
+    # [since, until): include day 15 only.
+    out = window_records(recs, since="2026-06-10", until="2026-06-20")
+    assert [r.id for r in out] == ["m2"]
+    assert len(window_records(recs, since="2026-06-15")) == 2
+    assert len(window_records(recs, until="2026-06-15")) == 1
 
 
 def test_direction_transcript():

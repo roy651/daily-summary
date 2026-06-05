@@ -23,26 +23,30 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.strip().lower()).strip("-") or "project"
 
 
-def _title_tokens(title: str) -> set[str]:
-    return {tok for tok in re.findall(r"[a-z0-9]+", title.lower()) if len(tok) > 2}
+def _norm_title(title: str) -> str:
+    """Normalized title key: lowercased, alphanumeric tokens, sorted — so word-order/spacing differences
+    still match but distinct titles don't (avoids the F5 subset-merge: 'logo' vs 'logo refresh')."""
+    return " ".join(sorted(re.findall(r"[a-z0-9]+", title.lower())))
 
 
 def _find_match(projects: list[Project], update: ProjectUpdate) -> Project | None:
+    # 1. Direct id match (the model echoed a known project_id).
     if update.project_id is not None:
         for p in projects:
             if p.project_id == update.project_id:
                 return p
-    # Fall back to (client_id, normalized-title) overlap so a fresh model id doesn't duplicate.
-    if update.client_id and update.title:
-        want = _title_tokens(update.title)
+    # 2. Shared evidence thread — strongest signal that this is the same project.
+    if update.evidence_thread_ids:
+        want_threads = set(update.evidence_thread_ids)
         for p in projects:
-            if p.client_id != update.client_id:
-                continue
-            have = _title_tokens(p.title)
-            if not want or not have:
-                continue
-            overlap = len(want & have) / min(len(want), len(have))
-            if overlap >= 0.6:
+            if want_threads & set(p.evidence_thread_ids):
+                return p
+    # 3. Same client + EXACT normalized title. We deliberately do NOT fuzzy-match (F5): a wrong
+    #    merge clobbers a real project; on ambiguity we prefer a duplicate the human can merge.
+    if update.client_id and update.title:
+        want = _norm_title(update.title)
+        for p in projects:
+            if p.client_id == update.client_id and _norm_title(p.title) == want:
                 return p
     return None
 
@@ -68,8 +72,15 @@ def _apply_one(
             dict.fromkeys([*project.evidence_thread_ids, *update.evidence_thread_ids])
         )
         project.evidence_thread_ids = merged
-    if update.blockers:
+    # None = field omitted (keep existing); [] = the model explicitly cleared the blockers (F6).
+    if update.blockers is not None:
         project.blockers = update.blockers
+    # Auto-expire blockers whose blocks_until has passed, so stale blockers don't inflate priority.
+    project.blockers = [
+        b
+        for b in project.blockers
+        if not (b.blocks_until and b.blocks_until < run_date)
+    ]
     if update.deadline is not None:
         project.deadline = update.deadline
     if update.deadline_kind is not None:
@@ -124,10 +135,17 @@ def apply_model_output(
     """Apply the model's project updates onto `projects` (mutating in place, appending new ones)."""
     thread_dates = thread_dates or {}
     result = list(projects)
+    # Snapshot the human-confirmed columns; apply must never write them (runtime guard for F10).
+    confirmed_before = {id(p): (p.status_confirmed, p.confirmed_note) for p in result}
     for update in output.project_updates:
         match = _find_match(result, update)
         if match is None:
             result.append(_new_project(update, run_date, thread_dates))
         else:
             _apply_one(match, update, run_date, thread_dates)
+    for p in result:
+        if id(p) in confirmed_before:
+            assert (p.status_confirmed, p.confirmed_note) == confirmed_before[id(p)], (
+                f"apply must never write human-confirmed columns (project {p.project_id})"
+            )
     return result

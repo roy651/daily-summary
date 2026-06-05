@@ -151,6 +151,135 @@ def test_model_coined_id_matches_existing_by_title_no_duplicate():
     assert projects[0].status_agent == "done"
 
 
+def test_subset_title_does_not_wrongly_merge(tmp_path):
+    # F5: "logo" must NOT fuzzy-merge into an existing "logo refresh" project for the same client.
+    projs = [
+        Project(
+            project_id="p1", client_id="sprig", title="Logo refresh", status="active"
+        )
+    ]
+    out = ModelOutput.from_dict(
+        {
+            "project_updates": [
+                {
+                    "project_id": None,
+                    "client_id": "sprig",
+                    "title": "Logo",
+                    "status_agent": "active",
+                }
+            ]
+        }
+    )
+    projects = apply_model_output(projs, out, run_date="2026-06-05")
+    assert len(projects) == 2  # distinct project created, not merged
+
+
+def test_shared_evidence_thread_matches_project():
+    # F5: a shared evidence thread id is a strong same-project signal even with a different title.
+    projs = [
+        Project(
+            project_id="p1",
+            client_id="sprig",
+            title="Homepage",
+            status="active",
+            evidence_thread_ids=["t-9"],
+        )
+    ]
+    out = ModelOutput.from_dict(
+        {
+            "project_updates": [
+                {
+                    "project_id": None,
+                    "client_id": "sprig",
+                    "title": "Landing page",
+                    "status_agent": "blocked",
+                    "evidence_thread_ids": ["t-9"],
+                }
+            ]
+        }
+    )
+    projects = apply_model_output(projs, out, run_date="2026-06-05")
+    assert len(projects) == 1
+    assert projects[0].status_agent == "blocked"
+
+
+def _blocked_project():
+    from digest_core.state import Blocker
+
+    return [
+        Project(
+            project_id="p1",
+            client_id="sprig",
+            title="RhythMedix website",
+            status="active",
+            blockers=[Blocker("awaiting_consent", "approval", "2026-06-01")],
+        )
+    ]
+
+
+def test_blockers_omitted_keeps_existing():
+    # F6: an omitted blockers field means "no change", not "clear".
+    out = ModelOutput.from_dict(
+        {"project_updates": [{"project_id": "p1", "status_agent": "blocked"}]}
+    )
+    projects = apply_model_output(_blocked_project(), out, run_date="2026-06-05")
+    assert len(projects[0].blockers) == 1
+
+
+def test_blockers_empty_list_clears():
+    # F6: an explicit [] means the model resolved the blockers.
+    out = ModelOutput.from_dict(
+        {
+            "project_updates": [
+                {"project_id": "p1", "status_agent": "active", "blockers": []}
+            ]
+        }
+    )
+    projects = apply_model_output(_blocked_project(), out, run_date="2026-06-05")
+    assert projects[0].blockers == []
+
+
+def test_expired_blocker_is_auto_cleared():
+    from digest_core.state import Blocker
+
+    projs = [
+        Project(
+            project_id="p1",
+            client_id="sprig",
+            title="X",
+            status="blocked",
+            blockers=[
+                Blocker(
+                    "awaiting_client_material",
+                    "copy",
+                    "2026-05-01",
+                    blocks_until="2026-06-01",
+                )
+            ],
+        )
+    ]
+    out = ModelOutput.from_dict(
+        {"project_updates": [{"project_id": "p1", "status_agent": "blocked"}]}
+    )
+    projects = apply_model_output(
+        projs, out, run_date="2026-06-05"
+    )  # past blocks_until
+    assert projects[0].blockers == []
+
+
+def test_model_cannot_change_confirmed_value():
+    # F10: a pre-set human-confirmed value must survive apply untouched.
+    projs = _projects()
+    projs[0].status_confirmed = "on_hold"
+    projs[0].confirmed_note = "Avigail: paused per client call"
+    out = ModelOutput.from_dict(
+        {"project_updates": [{"project_id": "p1", "status_agent": "active"}]}
+    )
+    projects = apply_model_output(projs, out, run_date="2026-06-05")
+    assert projects[0].status_confirmed == "on_hold"
+    assert projects[0].confirmed_note == "Avigail: paused per client call"
+
+
 def test_todos_carried_forward_when_model_omits_them():
     projs = _projects()
     projs[0].open_todos = [

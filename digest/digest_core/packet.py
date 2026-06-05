@@ -19,6 +19,10 @@ from digest_core.state import ClientProfile, Project
 # A type alias for documentation; the packet is canonically a JSON-able dict (it is serialized).
 ReasoningPacket = dict[str, Any]
 
+# Projects in these terminal states are not fed to the model (kept in state, but not re-surfaced).
+_PACKET_HIDDEN_STATUSES = frozenset({"done", "archived"})
+_MAX_EVIDENCE_IDS = 25
+
 GLOSSARY = (
     "Avigail is a freelance designer (studio 'ula'). Her biggest client, SPRIG, is an AGENCY with "
     "its own end-clients: she usually works through a SPRIG agent but sometimes with the end-client "
@@ -57,7 +61,8 @@ def _project_brief(p: Project) -> dict[str, Any]:
         "deadline_kind": p.deadline_kind,
         "blockers": [_blocker_brief(b) for b in p.blockers],
         "last_activity_date": p.last_activity_date,
-        "evidence_thread_ids": list(p.evidence_thread_ids),
+        # Cap to the most recent ids so the packet doesn't bloat monotonically over months (F2).
+        "evidence_thread_ids": list(p.evidence_thread_ids)[-_MAX_EVIDENCE_IDS:],
         "open_todos": [_todo_brief(t) for t in p.open_todos],
         "tasks": [
             {
@@ -122,7 +127,11 @@ def build_reasoning_packet(
     return {
         "run_date": run_date,
         "window": {"since": since, "until": until},
-        "current_projects": [_project_brief(p) for p in projects],
+        "current_projects": [
+            _project_brief(p)
+            for p in projects
+            if p.status not in _PACKET_HIDDEN_STATUSES
+        ],
         "clients": [_client_brief(c) for c in clients],
         "contacts": [
             {"email": email, "role": entry.role} for email, entry in contacts.items()

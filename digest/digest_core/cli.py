@@ -2,7 +2,7 @@
 
 A clean, unattended-capable CLI — no interactive prompts, config via env/flags, deterministic exit
 codes (0 ok, 1 usage/guard error, 2 model pass pending). Scheduling stays external (cron / launchd /
-Hermes invoke this). Subcommands: bootstrap | daily | feedback | review | show.
+Hermes invoke this). Subcommands: bootstrap | daily | feedback | review | score | show.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from digest_core.bootstrap import run_bootstrap
 from digest_core.contacts import DigestContactStore
 from digest_core.daily import run_digest
 from digest_core.delivery import select_delivery
-from digest_core.evidence import condition_records
+from digest_core.evidence import condition_records, window_records
 from digest_core.reasoner import SessionPending, select_reasoner
 from digest_core.relevance import KeepAllHumanJudge
 from digest_core.render import render_state_review_md
@@ -85,7 +85,7 @@ def _cmd_bootstrap(args, env: Mapping[str, str]) -> int:
     run_date = args.as_of or _today()
     records = ingest_email_export(export_root)
     reasoner = select_reasoner(
-        env, work_dir=state_dir, replay_path=env.get("REPLAY_OUTPUT")
+        env, work_dir=state_dir, run_date=run_date, replay_path=env.get("REPLAY_OUTPUT")
     )
     try:
         result = run_bootstrap(
@@ -94,6 +94,7 @@ def _cmd_bootstrap(args, env: Mapping[str, str]) -> int:
             run_date=run_date,
             holdout_days=args.holdout_days,
             self_addresses=_self_addresses(env),
+            since=args.since,
         )
     except SessionPending as pending:
         log.warning(str(pending))
@@ -123,8 +124,19 @@ def _cmd_daily(args, env: Mapping[str, str]) -> int:
         or (date.fromisoformat(run_date) - timedelta(days=args.window_days)).isoformat()
     )
 
+    # Replay of a past day must be offline + non-mutating (F7): no live pull, no watermark.
+    if args.as_of and not args.from_export:
+        log.error(
+            "--as-of replays a past day and must read an offline source; pass --from-export PATH"
+        )
+        return 1
+
     if args.from_export:
-        records = ingest_email_export(args.from_export)
+        records = window_records(
+            ingest_email_export(args.from_export),
+            since=args.ingest_since,
+            until=args.ingest_until,
+        )
         threads = condition_records(
             records, judge=KeepAllHumanJudge(), contact_store=contacts
         )
@@ -133,7 +145,7 @@ def _cmd_daily(args, env: Mapping[str, str]) -> int:
         threads, watermark_commit = _live_pull(env, contacts, state_dir)
 
     reasoner = select_reasoner(
-        env, work_dir=state_dir, replay_path=env.get("REPLAY_OUTPUT")
+        env, work_dir=state_dir, run_date=run_date, replay_path=env.get("REPLAY_OUTPUT")
     )
     delivery = select_delivery(env, out_dir=out_dir)
     try:
@@ -156,8 +168,13 @@ def _cmd_daily(args, env: Mapping[str, str]) -> int:
         return 2
 
     log.info("daily: delivered=%s (%s)", result.delivery.sent, result.delivery.detail)
-    # Advance the watermark only after a successful, persisted delivery.
-    if watermark_commit is not None and result.delivery.sent and not args.dry_run:
+    # Advance the watermark only after a successful, persisted, present-day delivery (never on replay).
+    if (
+        watermark_commit is not None
+        and result.delivery.sent
+        and not args.dry_run
+        and not args.as_of
+    ):
         watermark_commit()
     return 0
 
@@ -252,6 +269,10 @@ def build_parser() -> argparse.ArgumentParser:
         "bootstrap", help="one-shot cold-start map build from a mail export"
     )
     b.add_argument("--export-root")
+    b.add_argument(
+        "--since",
+        help="lower-bound ingest date (YYYY-MM-DD); pair with --as-of to bootstrap one month",
+    )
     b.add_argument("--holdout-days", type=int, default=7)
     b.add_argument("--force", action="store_true")
     b.add_argument("--dry-run", action="store_true")
@@ -267,6 +288,13 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--window-days", type=int, default=1)
     d.add_argument(
         "--from-export", help="ingest a local mail export instead of a live IMAP pull"
+    )
+    d.add_argument(
+        "--ingest-since", help="lower-bound date filter for --from-export (YYYY-MM-DD)"
+    )
+    d.add_argument(
+        "--ingest-until",
+        help="upper-bound (exclusive) date filter for --from-export (YYYY-MM-DD)",
     )
     d.add_argument("--dry-run", action="store_true")
     d.set_defaults(func=_cmd_daily)

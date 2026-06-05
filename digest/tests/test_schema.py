@@ -105,6 +105,39 @@ def test_unknown_importance_rejected():
         )
 
 
+def test_unknown_deadline_kind_rejected():
+    with pytest.raises(ValueError):
+        ModelOutput.from_dict(
+            {"project_updates": [_minimal_update(deadline_kind="firm")]}
+        )
+
+
+def test_missing_required_field_raises_valueerror_not_keyerror():
+    # F11: required-field failures use the loud ValueError style, not an opaque KeyError.
+    with pytest.raises(ValueError, match="headline"):
+        ModelOutput.from_dict(
+            {"digest_updates": [{"detail": "x", "importance": "high"}]}
+        )
+    with pytest.raises(ValueError, match="thread_id"):
+        ModelOutput.from_dict({"unresolved": [{"why": "x"}]})
+
+
+def test_blockers_omitted_is_none_present_is_list():
+    # F6: distinguish "field absent" (None) from "explicitly empty" ([]).
+    assert (
+        ModelOutput.from_dict({"project_updates": [_minimal_update()]})
+        .project_updates[0]
+        .blockers
+        is None
+    )
+    assert (
+        ModelOutput.from_dict({"project_updates": [_minimal_update(blockers=[])]})
+        .project_updates[0]
+        .blockers
+        == []
+    )
+
+
 def test_empty_output_is_valid():
     out = ModelOutput.from_dict({})
     assert (

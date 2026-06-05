@@ -120,17 +120,17 @@ def prioritize(projects: list[Project], *, run_date: str) -> list[RankedTodo]:
                     _band(score, hard_soon),
                 )
             )
-        # Task-level todos prefer the task deadline, falling back to the project's.
+        # Task-level todos prefer the task deadline, falling back to the project's. A due_hint is the
+        # model's *soft* guess, so it uses the project's deadline_kind — never silently "hard" (F4).
         for task in p.tasks:
             for todo in task.open_todos:
                 deadline = todo.due_hint or task.deadline or p.deadline
-                kind = (
-                    p.deadline_kind
-                    if (todo.due_hint or task.deadline) is None
-                    else "hard"
-                )
                 score, hard_soon = _score(
-                    todo, p, deadline=deadline, deadline_kind=kind, run_date=run_date
+                    todo,
+                    p,
+                    deadline=deadline,
+                    deadline_kind=p.deadline_kind,
+                    run_date=run_date,
                 )
                 ranked.append(
                     RankedTodo(

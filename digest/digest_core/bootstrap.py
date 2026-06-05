@@ -84,10 +84,16 @@ def run_bootstrap(
     holdout_days: int,
     self_addresses: Iterable[str],
     contacts: DigestContactStore | None = None,
+    since: str | None = None,
 ) -> BootstrapResult:
     self_addresses = {a.strip().lower() for a in self_addresses}
     cutoff = date.fromisoformat(run_date) - timedelta(days=holdout_days)
-    kept = [r for r in records if r.date.date() < cutoff]
+    lo = date.fromisoformat(since) if since else None
+    kept = [
+        r
+        for r in records
+        if r.date.date() < cutoff and (lo is None or r.date.date() >= lo)
+    ]
 
     contacts = contacts or DigestContactStore()
     threads = condition_records(kept, judge=KeepAllHumanJudge(), contact_store=contacts)
