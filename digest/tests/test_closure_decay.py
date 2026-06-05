@@ -247,6 +247,35 @@ def test_overdue_todo_on_fresh_project_is_not_suspected():
 # ── D1: overdue deadline is NOT urgent ──
 
 
+def test_archived_or_done_project_todos_not_ranked():
+    # A closed project's leftover todos are NOT active work — they must not appear in the ranked list.
+    projs = [
+        Project(
+            project_id="a",
+            client_id="c",
+            title="t",
+            status="archived",
+            open_todos=[_todo("ghost task on archived project")],
+        ),
+        Project(
+            project_id="b",
+            client_id="c",
+            title="t2",
+            status="done",
+            open_todos=[_todo("ghost task on done project")],
+        ),
+        Project(
+            project_id="d",
+            client_id="c",
+            title="t3",
+            status="active",
+            open_todos=[_todo("real active task")],
+        ),
+    ]
+    texts = [r.todo.text for r in prioritize(projs, run_date="2026-06-06")]
+    assert texts == ["real active task"]
+
+
 def test_overdue_deadline_not_urgent():
     projs = [
         Project(

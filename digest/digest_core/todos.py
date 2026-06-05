@@ -103,6 +103,10 @@ def prioritize(projects: list[Project], *, run_date: str) -> list[RankedTodo]:
     """Rank every open todo (project- and task-level) into urgency bands. Deterministic ordering."""
     ranked: list[RankedTodo] = []
     for p in projects:
+        # Closed projects carry no active work — their leftover todos must not surface as next-actions
+        # (the decay/closure model archives the project; ranking its todos would re-surface ghost work).
+        if p.status in ("done", "archived"):
+            continue
         # Project-level todos use the project's own deadline.
         for todo in p.open_todos:
             deadline = todo.due_hint or p.deadline
