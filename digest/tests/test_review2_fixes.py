@@ -22,10 +22,12 @@ from digest_core.state import ClientProfile, Project
 
 
 def _promote(output_dict):
+    # Promotion derives from the merged project state, so apply the output first, then promote.
     contacts = DigestContactStore()
-    promote_work_contacts(
-        ModelOutput.from_dict(output_dict), contacts, run_date="2026-05-15"
+    projects = apply_model_output(
+        [], ModelOutput.from_dict(output_dict), run_date="2026-05-15"
     )
+    promote_work_contacts(projects, contacts, run_date="2026-05-15")
     return contacts
 
 
@@ -110,13 +112,16 @@ def test_non_email_target_and_unrelated_addresses_not_promoted():
 def test_inferred_role_does_not_flip_established_role():
     c = DigestContactStore()
     c.add("molly@sprig.example", role="agent", source="bootstrap")
-    # A later model promotion as "client" must NOT overwrite the established "agent".
-    promote_work_contacts(
+    # A later model promotion as "client" (direct-work todo) must NOT overwrite the established "agent".
+    projects = apply_model_output(
+        [],
         ModelOutput.from_dict(
             {
                 "project_updates": [
                     {
-                        "project_id": "p1",
+                        "project_id": None,
+                        "client_id": "x",
+                        "title": "t",
                         "todos": [
                             {
                                 "text": "x",
@@ -128,9 +133,9 @@ def test_inferred_role_does_not_flip_established_role():
                 ]
             }
         ),
-        c,
         run_date="2026-05-15",
     )
+    promote_work_contacts(projects, c, run_date="2026-05-15")
     assert c.role_of("molly@sprig.example") == "agent"
 
 

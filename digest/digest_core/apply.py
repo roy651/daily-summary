@@ -210,25 +210,20 @@ def _looks_like_email(value: str | None) -> bool:
     return bool(value and _EMAIL_RE.fullmatch(value.strip()))
 
 
-def promote_work_contacts(output: ModelOutput, contacts, *, run_date: str) -> None:
-    """Add to the contact store the people the MODEL attached to real work this run (the reasoning
-    test: 'was there genuine work correspondence?'). Roles are inferred from how the model used them:
+def promote_work_contacts(projects: list[Project], contacts, *, run_date: str) -> None:
+    """Add to the contact store the people the model tied to real work (the reasoning test: 'was there
+    genuine work correspondence?'). Derived from the MERGED project state — not the raw per-run output —
+    so agency-vs-direct is resolved from the project's own ``end_client`` (an update that omits it can't
+    mis-tag a known agent). Roles:
       * a project's subcontractor                       -> subcontractor
       * a verify_subcontractor todo target              -> subcontractor
       * a communicate_client todo target on agency work -> agent (reached via the agent)
       * a communicate_client todo target on direct work -> client
     This replaces indiscriminate bootstrap seeding, so only work-relevant contacts become known/T1."""
-    for u in output.project_updates:
-        if _looks_like_email(u.subcontractor):
-            contacts.add(
-                u.subcontractor,
-                role="subcontractor",
-                source="model",
-                reason="project subcontractor",
-                added=run_date,
-            )
-        is_agency_work = bool(u.end_client)
-        for todo in u.todos:
+
+    def _promote(p: Project, todos) -> None:
+        is_agency_work = bool(p.end_client)
+        for todo in todos:
             if not _looks_like_email(todo.target):
                 continue
             if todo.category == "verify_subcontractor":
@@ -244,3 +239,24 @@ def promote_work_contacts(output: ModelOutput, contacts, *, run_date: str) -> No
                 reason=f"{todo.category} target",
                 added=run_date,
             )
+
+    for p in projects:
+        if _looks_like_email(p.subcontractor):
+            contacts.add(
+                p.subcontractor,
+                role="subcontractor",
+                source="model",
+                reason="project subcontractor",
+                added=run_date,
+            )
+        _promote(p, p.open_todos)
+        for task in p.tasks:
+            if _looks_like_email(task.subcontractor):
+                contacts.add(
+                    task.subcontractor,
+                    role="subcontractor",
+                    source="model",
+                    reason="task subcontractor",
+                    added=run_date,
+                )
+            _promote(p, task.open_todos)

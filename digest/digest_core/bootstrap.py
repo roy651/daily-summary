@@ -25,7 +25,7 @@ from digest_core.evidence import condition_records
 from digest_core.knowledge import KnowledgeStore
 from digest_core.packet import build_reasoning_packet
 from digest_core.reasoner import Reasoner
-from digest_core.relevance import KeepAllHumanJudge
+from digest_core.relevance import KeepAllHumanJudge, partition_marketing
 from digest_core.state import ClientProfile, Project
 
 BOOTSTRAP_GLOSSARY = (
@@ -67,6 +67,9 @@ def run_bootstrap(
 
     contacts = contacts or DigestContactStore()
     threads = condition_records(kept, judge=KeepAllHumanJudge(), contact_store=contacts)
+    # N2: same conservative bulk/marketing demotion as the daily path, so the cold-start packet isn't
+    # buried in noise either. (Dropped threads can't become projects; not surfaced here as there's no digest.)
+    threads, _filtered = partition_marketing(threads)
 
     since = min((r.date.date().isoformat() for r in kept), default=cutoff.isoformat())
     packet = build_reasoning_packet(
@@ -85,7 +88,7 @@ def run_bootstrap(
     projects = apply_model_output([], output, run_date=run_date, thread_dates={})
     clients = upsert_clients(projects)
     # Reasoning-based contact promotion: only people the model tied to real work become known (+roles).
-    promote_work_contacts(output, contacts, run_date=run_date)
+    promote_work_contacts(projects, contacts, run_date=run_date)
     apply_insights(output, clients, knowledge, run_date=run_date)
     return BootstrapResult(
         projects=projects, clients=clients, contacts=contacts, knowledge=knowledge
