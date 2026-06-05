@@ -31,7 +31,11 @@ GLOSSARY = (
     "end_client=null (vs end-client work where end_client is set). Such managers are still AGENTS, not "
     "clients. Her subcontractors usually work through her but sometimes deal with clients directly and "
     "CC her. Projects vary: some have hard deadlines, many are long-running and frequently on-hold "
-    "awaiting client material, consent, or another blocker."
+    "awaiting client material, consent, or another blocker. "
+    "IMPORTANT — do NOT model a person as a client unless work is genuinely done FOR them: someone who "
+    "INVOICES Avigail or whose output FEEDS her deliverables (e.g. an illustrator) is a SUBCONTRACTOR; "
+    "someone who COORDINATES/manages on the agency side is an AGENT. Their jobs belong as todos under "
+    "the real client's project (verify_subcontractor / communicate_client), not as a client of their own."
 )
 
 
