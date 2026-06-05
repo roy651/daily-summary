@@ -14,9 +14,10 @@ from email.utils import parseaddr
 
 from mail_evidence.records import EvidenceRecord, Thread
 
-from digest_core.apply import apply_model_output
+from digest_core.apply import apply_insights, apply_model_output
 from digest_core.contacts import DigestContactStore
 from digest_core.evidence import condition_records
+from digest_core.knowledge import KnowledgeStore
 from digest_core.packet import build_reasoning_packet
 from digest_core.reasoner import Reasoner
 from digest_core.relevance import KeepAllHumanJudge
@@ -35,6 +36,7 @@ class BootstrapResult:
     projects: list[Project]
     clients: list[ClientProfile]
     contacts: DigestContactStore
+    knowledge: KnowledgeStore
 
 
 def _human_addresses(record: EvidenceRecord, self_addresses: set[str]) -> list[str]:
@@ -84,8 +86,10 @@ def run_bootstrap(
     holdout_days: int,
     self_addresses: Iterable[str],
     contacts: DigestContactStore | None = None,
+    knowledge: KnowledgeStore | None = None,
     since: str | None = None,
 ) -> BootstrapResult:
+    knowledge = knowledge if knowledge is not None else KnowledgeStore()
     self_addresses = {a.strip().lower() for a in self_addresses}
     cutoff = date.fromisoformat(run_date) - timedelta(days=holdout_days)
     lo = date.fromisoformat(since) if since else None
@@ -110,8 +114,12 @@ def run_bootstrap(
         threads=threads,
         self_addresses=self_addresses,
         glossary=BOOTSTRAP_GLOSSARY,
+        knowledge_general=knowledge.general_notes(),
     )
     output = reasoner.reason(packet)
     projects = apply_model_output([], output, run_date=run_date, thread_dates={})
     clients = _derive_clients(projects)
-    return BootstrapResult(projects=projects, clients=clients, contacts=contacts)
+    apply_insights(output, clients, knowledge, run_date=run_date)
+    return BootstrapResult(
+        projects=projects, clients=clients, contacts=contacts, knowledge=knowledge
+    )

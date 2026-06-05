@@ -14,9 +14,21 @@ from __future__ import annotations
 
 import re
 
+from digest_core.knowledge import KnowledgeStore
 from digest_core.schema import ModelOutput, ProjectUpdate
-from digest_core.state import Project
+from digest_core.state import ClientProfile, Observation, Project
 from digest_core.todos import merge_todos
+
+
+def _append_observations(target, notes: list[str], run_date: str) -> None:
+    """Append free-text notes as Observations, de-duplicated by note text (knowledge accretes)."""
+    have = {o.note.strip().lower() for o in target.observations}
+    for note in notes:
+        if note.strip() and note.strip().lower() not in have:
+            target.observations.append(
+                Observation(date=run_date, source="agent", note=note.strip())
+            )
+            have.add(note.strip().lower())
 
 
 def _slug(text: str) -> str:
@@ -98,6 +110,9 @@ def _apply_one(
     # Carry-forward-merge todos (surface, don't drop).
     project.open_todos = merge_todos(project.open_todos, update.todos)
 
+    # Accumulate tacit project knowledge.
+    _append_observations(project, update.observations, run_date)
+
     # Observed-truth: advance last_activity_date from evidence only, never regress.
     ev_date = _max_evidence_date(project.evidence_thread_ids, thread_dates)
     if ev_date and (
@@ -149,3 +164,20 @@ def apply_model_output(
                 f"apply must never write human-confirmed columns (project {p.project_id})"
             )
     return result
+
+
+def apply_insights(
+    output: ModelOutput,
+    clients: list[ClientProfile],
+    knowledge: KnowledgeStore,
+    *,
+    run_date: str,
+) -> None:
+    """Route the model's tacit-knowledge insights: scope 'general' -> knowledge store; a client_id ->
+    that client's observations. Unknown client scopes fall back to the general store (never dropped)."""
+    by_id = {c.client_id: c for c in clients}
+    for ins in output.insights:
+        if ins.scope == "general" or ins.scope not in by_id:
+            knowledge.add_general(ins.note, date=run_date)
+        else:
+            _append_observations(by_id[ins.scope], [ins.note], run_date)

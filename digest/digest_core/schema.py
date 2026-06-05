@@ -36,6 +36,8 @@ class ProjectUpdate:
     # None = field omitted (keep existing blockers); [] = explicitly clear them (F6).
     blockers: list[Blocker] | None = None
     todos: list[Todo] = field(default_factory=list)
+    # Soft tacit knowledge about this project (free-text notes); appended to project.observations.
+    observations: list[str] = field(default_factory=list)
     deadline: str | None = None
     deadline_kind: str | None = None
     # Required only for new projects (project_id is None):
@@ -73,6 +75,7 @@ class ProjectUpdate:
             todos=[Todo.from_dict(t) for t in d.get("todos", [])],
             deadline=d.get("deadline"),
             deadline_kind=d.get("deadline_kind"),
+            observations=list(d.get("observations", [])),
             client_id=d.get("client_id"),
             end_client=d.get("end_client"),
             title=d.get("title"),
@@ -113,11 +116,26 @@ class Unresolved:
 
 
 @dataclass
+class Insight:
+    """A tacit-knowledge note. scope = "general" (-> knowledge store) or a client_id (-> that client)."""
+
+    scope: str
+    note: str
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Insight:
+        return cls(
+            scope=_require(d, "scope", "insight"), note=_require(d, "note", "insight")
+        )
+
+
+@dataclass
 class ModelOutput:
     generated_at: str | None = None
     project_updates: list[ProjectUpdate] = field(default_factory=list)
     digest_updates: list[DigestUpdate] = field(default_factory=list)
     unresolved: list[Unresolved] = field(default_factory=list)
+    insights: list[Insight] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> ModelOutput:
@@ -130,4 +148,5 @@ class ModelOutput:
                 DigestUpdate.from_dict(u) for u in d.get("digest_updates", [])
             ],
             unresolved=[Unresolved.from_dict(u) for u in d.get("unresolved", [])],
+            insights=[Insight.from_dict(i) for i in d.get("insights", [])],
         )

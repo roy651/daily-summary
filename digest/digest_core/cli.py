@@ -22,6 +22,7 @@ from digest_core.contacts import DigestContactStore
 from digest_core.daily import run_digest
 from digest_core.delivery import select_delivery
 from digest_core.evidence import condition_records, window_records
+from digest_core.knowledge import KnowledgeStore
 from digest_core.reasoner import SessionPending, select_reasoner
 from digest_core.relevance import KeepAllHumanJudge
 from digest_core.render import render_state_review_md
@@ -63,7 +64,8 @@ def _load_state(
         else []
     )
     contacts = DigestContactStore.load(state_dir / "contacts.json")
-    return projects, clients, contacts
+    knowledge = KnowledgeStore.load(state_dir / "knowledge.json")
+    return projects, clients, contacts, knowledge
 
 
 # ── subcommands ──────────────────────────────────────────────────────────────────
@@ -94,6 +96,7 @@ def _cmd_bootstrap(args, env: Mapping[str, str]) -> int:
             run_date=run_date,
             holdout_days=args.holdout_days,
             self_addresses=_self_addresses(env),
+            knowledge=KnowledgeStore.load(state_dir / "knowledge.json"),
             since=args.since,
         )
     except SessionPending as pending:
@@ -112,12 +115,13 @@ def _cmd_bootstrap(args, env: Mapping[str, str]) -> int:
     write_projects(result.projects, state_dir / "projects.json")
     write_clients(result.clients, state_dir / "clients.json")
     result.contacts.save(state_dir / "contacts.json")
+    result.knowledge.save(state_dir / "knowledge.json")
     return 0
 
 
 def _cmd_daily(args, env: Mapping[str, str]) -> int:
     state_dir, out_dir = Path(args.state_dir), Path(args.out_dir)
-    projects, clients, contacts = _load_state(state_dir)
+    projects, clients, contacts, knowledge = _load_state(state_dir)
     run_date = args.as_of or _today()
     since = (
         args.since
@@ -161,6 +165,7 @@ def _cmd_daily(args, env: Mapping[str, str]) -> int:
             self_addresses=_self_addresses(env),
             state_dir=state_dir,
             out_dir=out_dir,
+            knowledge=knowledge,
             persist=not args.dry_run,
         )
     except SessionPending as pending:
@@ -199,7 +204,7 @@ def _cmd_feedback(args, env: Mapping[str, str]) -> int:
 
 
 def _cmd_review(args, env: Mapping[str, str]) -> int:
-    projects, clients, _ = _load_state(Path(args.state_dir))
+    projects, clients, _, _ = _load_state(Path(args.state_dir))
     out = Path(args.out_dir) / "state-review.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render_state_review_md(clients, projects), encoding="utf-8")
@@ -219,7 +224,7 @@ def _cmd_score(args, env: Mapping[str, str]) -> int:
 
 
 def _cmd_show(args, env: Mapping[str, str]) -> int:
-    projects, clients, contacts = _load_state(Path(args.state_dir))
+    projects, clients, contacts, _ = _load_state(Path(args.state_dir))
     print(
         f"clients: {len(clients)}  projects: {len(projects)}  contacts: {len(contacts.items())}"
     )

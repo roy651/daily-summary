@@ -64,6 +64,7 @@ def _project_brief(p: Project) -> dict[str, Any]:
         # Cap to the most recent ids so the packet doesn't bloat monotonically over months (F2).
         "evidence_thread_ids": list(p.evidence_thread_ids)[-_MAX_EVIDENCE_IDS:],
         "open_todos": [_todo_brief(t) for t in p.open_todos],
+        "observations": [o.note for o in p.observations],
         "tasks": [
             {
                 "task_id": t.task_id,
@@ -87,6 +88,7 @@ def _client_brief(c: ClientProfile) -> dict[str, Any]:
         "managing_contacts": [
             {"name": m.name, "email": m.email} for m in c.managing_contacts
         ],
+        "observations": [o.note for o in c.observations],
     }
 
 
@@ -122,11 +124,15 @@ def build_reasoning_packet(
     threads: list[Thread],
     self_addresses: Iterable[str],
     glossary: str = GLOSSARY,
+    knowledge_general: list[str] | None = None,
 ) -> ReasoningPacket:
     self_addresses = set(self_addresses)
     return {
         "run_date": run_date,
         "window": {"since": since, "until": until},
+        # General tacit knowledge accumulated so far ("how Avigail operates"); per-client/per-project
+        # knowledge rides on each client/project's "observations".
+        "knowledge": list(knowledge_general or []),
         "current_projects": [
             _project_brief(p)
             for p in projects

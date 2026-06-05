@@ -13,10 +13,11 @@ from pathlib import Path
 
 from mail_evidence.records import Thread
 
-from digest_core.apply import apply_model_output
+from digest_core.apply import apply_insights, apply_model_output
 from digest_core.contacts import DigestContactStore
 from digest_core.delivery import DeliveryResult
 from digest_core.evidence import unify
+from digest_core.knowledge import KnowledgeStore
 from digest_core.packet import build_reasoning_packet
 from digest_core.reasoner import Reasoner, ReasoningPacket
 from digest_core.render import render_digest_md, render_todos_md
@@ -56,8 +57,10 @@ def run_digest(
     self_addresses: Iterable[str],
     state_dir: str | Path,
     out_dir: str | Path,
+    knowledge: KnowledgeStore | None = None,
     persist: bool = True,
 ) -> DigestResult:
+    knowledge = knowledge if knowledge is not None else KnowledgeStore()
     cleaned = unify(threads, self_addresses=self_addresses)
     thread_dates = thread_max_dates(cleaned)
 
@@ -70,11 +73,13 @@ def run_digest(
         contacts=contacts,
         threads=cleaned,
         self_addresses=self_addresses,
+        knowledge_general=knowledge.general_notes(),
     )
     output = reasoner.reason(packet)  # may raise SessionPending (caught by the CLI)
     projects = apply_model_output(
         projects, output, run_date=run_date, thread_dates=thread_dates
     )
+    apply_insights(output, clients, knowledge, run_date=run_date)
 
     digest_md = render_digest_md(output, projects, run_date=run_date)
     todos_md = render_todos_md(
@@ -87,6 +92,7 @@ def run_digest(
         write_projects(projects, state_dir / "projects.json")
         write_clients(clients, state_dir / "clients.json")
         contacts.save(state_dir / "contacts.json")
+        knowledge.save(state_dir / "knowledge.json")
 
     return DigestResult(
         run_date=run_date,
