@@ -68,14 +68,16 @@ def _score(
     hard_soon = False
 
     # 1. Deadline pressure — closer hard deadline => higher; soft deadlines contribute less.
-    #    OVERDUE (days_to_due < 0) gets NO urgency boost (D1): a past deadline is most likely already
-    #    done and just not closed — it's surfaced as a "suspected done" item, not pushed to Urgent.
     days_to_due = _days_between(run_date, deadline)
     if days_to_due is not None and days_to_due >= 0:
         weight = 1.0 if deadline_kind == "hard" else 0.4
         score += max(0.0, 30 - days_to_due) * weight
         if deadline_kind == "hard" and days_to_due <= 2:
             hard_soon = True
+    elif days_to_due is not None and days_to_due < 0:
+        # Overdue: a modest nudge (it's genuinely past due → address it), never the runaway max-urgency
+        # of the old bug (D1). If the project is ALSO stale, decay routes it to "suspected done" instead.
+        score += 6.0
 
     # 2. Blocker leverage — an action that unblocks a stalled project is high-leverage.
     if project.status in _BLOCKED_STATUSES and todo.category in _UNBLOCKING_CATEGORIES:
@@ -176,6 +178,7 @@ def suspected_closures(
     run_date: str,
     dormant_after_days: int = 28,
     stale_todo_after_days: int = 21,
+    overdue_needs_silent_days: int = 14,
 ) -> list[Suspicion]:
     """Decay pass: surface (do NOT delete) projects/todos that look finished or dormant.
 
@@ -203,16 +206,23 @@ def suspected_closures(
         for _task_id, todo in all_todos:
             due = todo.due_hint or p.deadline
             dd = _days(run_date, due)
-            if dd is not None and dd < 0:
+            # Overdue ⇒ "probably done" ONLY if the project is ALSO stale; on a fresh/active project an
+            # overdue todo is genuinely due-now (stays in the list, nudged), not a completion to confirm.
+            if (
+                dd is not None
+                and dd < 0
+                and silent is not None
+                and silent >= overdue_needs_silent_days
+            ):
                 out.append(
                     Suspicion(
                         "overdue_todo",
                         p.project_id,
                         todo.text,
-                        f"deadline {due} passed",
+                        f"deadline {due} passed, project silent {silent}d",
                     )
                 )
-            else:
+            elif not (dd is not None and dd < 0):
                 stale = _days(p.last_activity_date, run_date)
                 if stale is not None and stale >= stale_todo_after_days:
                     out.append(

@@ -114,19 +114,35 @@ def test_dormant_project_is_suspected_not_deleted():
     assert len(projs) == 2  # nothing deleted
 
 
-def test_overdue_todo_is_suspected_done():
+def test_overdue_todo_on_stale_project_is_suspected_done():
     projs = [
         Project(
             project_id="p1",
             client_id="c",
             title="t",
             status="active",
-            last_activity_date="2026-05-18",
+            last_activity_date="2026-03-01",  # project also gone quiet
             open_todos=[_todo("Ship the booth", due_hint="2026-04-01")],
         )
     ]
     s = suspected_closures(projs, run_date="2026-05-18")
     assert any(x.kind == "overdue_todo" and "Ship the booth" in x.title for x in s)
+
+
+def test_overdue_todo_on_fresh_project_is_not_suspected():
+    # Just-overdue on an actively-worked project is genuinely due-now, not a completion to confirm.
+    projs = [
+        Project(
+            project_id="p1",
+            client_id="c",
+            title="t",
+            status="active",
+            last_activity_date="2026-05-18",  # fresh
+            open_todos=[_todo("Fix the typo and launch", due_hint="2026-05-17")],
+        )
+    ]
+    s = suspected_closures(projs, run_date="2026-05-18")
+    assert not any(x.kind == "overdue_todo" for x in s)
 
 
 # ── D1: overdue deadline is NOT urgent ──
