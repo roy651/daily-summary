@@ -59,6 +59,27 @@ Avigail drop notes in the feedback mail / review file and have the system route 
 consume half of the learning loop (K2-adjacent): tag provenance so human-confirmed notes outrank
 agent-inferred ones.
 
+## D1 — Past/overdue deadlines invert to MAXIMUM urgency (prioritization bug)
+
+`todos._score` does `score += max(0, 30 - days_to_due) * weight`. When `days_to_due` is negative (the
+deadline has passed), `30 - days_to_due` grows, so an **overdue** hard deadline scores *higher* and
+lands in the "Urgent" band. Visible in the May-18 digest: the Urgent band is entirely Feb/Apr RMX
+CRT-booth todos whose (April) deadline is long past. *Fix:* clamp/branch on `days_to_due < 0` — either
+drop deadline pressure for past dates, or route overdue items to a distinct "Overdue — still open?"
+treatment (likely they're done and just weren't closed → ties to D2). Cheap, high-visibility.
+
+## D2 — Carry-forward TODO bloat: todos accumulate for months, never close
+
+`merge_todos` carries forward any prior todo the model didn't restate ("surface, don't drop"), but
+nothing ever *closes* one: the model isn't asked to, and the deterministic layer never ages/drops.
+After a Feb→May backfill the digest's "Whenever" band holds ~60 todos, many clearly completed (e.g.
+"Send Charlene the TurnCare invoice for February" in a May digest). Recall-first was right early, but
+at horizon it makes the TODO list unusable. *Options:* (a) have the model emit explicit `done`/closed
+todo ids each run; (b) age-out todos on projects with newer activity that didn't restate them; (c) for
+a *touched* project, treat the model's todo set as authoritative (replace) rather than union; (d) cap
+the rendered list per band + per project. Probably (a)+(d). This is the most user-visible quality gap
+in the real digest and pairs with reviewer K1 (uncapped growth).
+
 ## Cross-refs
 - Reviewer **K2** (knowledge provenance / human-confirmed tier) — C2/C4 need it: relational + billing
   facts and human corrections should be a confirmed tier that outranks agent guesses.
