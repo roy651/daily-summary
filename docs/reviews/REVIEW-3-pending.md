@@ -59,6 +59,39 @@ Avigail drop notes in the feedback mail / review file and have the system route 
 consume half of the learning loop (K2-adjacent): tag provenance so human-confirmed notes outrank
 agent-inferred ones.
 
+## D0 (ROOT) — The system is add-only: no removal / closure / decay model
+
+D1 and D2 are symptoms of one root gap. Every mechanism we built **adds or updates** (projects,
+statuses, todos, knowledge); **nothing closes, removes, or decays**. So the map shows ~20 "active"
+projects (many dormant/done) and the TODO list accretes for months. A digest whose status + todos
+don't decay goes stale within a week — this is the missing half of the product.
+
+**Is the closure signal in the mail? Mostly yes, and we under-used it** (a *reasoning asymmetry*, not
+a missing signal). Strong, present signals: approval/sign-off ("approved", "perfect", "ready for
+press"), delivery/sent ("attached", "here's the link"), receipt/ack ("received, thank you"), and
+invoice-issued (C2's other direction). We even wrote these into `status_evidence` ("RoVo banners
+approved") then *added* a follow-up todo and never *closed* the prior ones — because there's no
+*close* task in the prompt, no schema affordance to close a todo / mark a project done, and
+`merge_todos` only accumulates.
+
+**A 4th closure signal we already capture but discard:** Avigail's own check-offs. The digest writes
+an editable `out/todos.md` with `- [ ]` boxes; `parse_todos_md` already extracts checked items as
+`eod_actuals` (done) into `state/feedback/` — but we never *consume* them. Highest-confidence closure,
+sitting unused.
+
+**Genuinely-missing signal = dormancy:** "went quiet for 6 weeks" is *absence*, no positive email
+cue — the only case that needs the surface-a-guess path.
+
+**Proposed model — one decay model, three inputs, one safety valve:**
+1. *Active closure*: model emits `closed_todos` + `status: done` from approval/delivery/receipt/invoice evidence (symmetric to add).
+2. *Feedback closure*: consume Avigail's check-offs / `done:` replies (already captured).
+3. *Passive decay*: staleness → *suspected* dormant/stale.
+4. *Safety valve*: anything suspected (1 or 3) → a "Suspected done / dormant — confirm to clear" digest
+   section; never silent-delete; confirmed → clears and becomes `status_confirmed` (fits the 3-way gate).
+D1 folds in: an overdue hard deadline is *probably done* → routed to "suspected done / confirm", not Urgent.
+
+This is the highest-priority next build. D1/D2 below are the symptom-level notes.
+
 ## D1 — Past/overdue deadlines invert to MAXIMUM urgency (prioritization bug)
 
 `todos._score` does `score += max(0, 30 - days_to_due) * weight`. When `days_to_due` is negative (the
