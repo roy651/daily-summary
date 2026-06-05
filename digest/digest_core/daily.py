@@ -8,7 +8,7 @@ pull + watermark around it; the watermark is committed only after delivery succe
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from mail_evidence.records import Thread
@@ -29,7 +29,7 @@ from digest_core.relevance import partition_marketing
 from digest_core.render import render_digest_md, render_todos_md
 from digest_core.schema import ModelOutput
 from digest_core.state import ClientProfile, Project, write_clients, write_projects
-from digest_core.todos import prioritize
+from digest_core.todos import close_todos_from_feedback, prioritize, suspected_closures
 
 
 @dataclass
@@ -43,6 +43,10 @@ class DigestResult:
     filtered: list[
         Thread
     ]  # threads demoted as bulk/marketing this run (surfaced, not silently dropped)
+    closed_from_feedback: int = 0  # todos cleared from Avigail's check-offs this run
+    suspected: list = field(
+        default_factory=list
+    )  # decay guesses surfaced for confirmation
 
 
 def thread_max_dates(threads: list[Thread]) -> dict[str, str]:
@@ -71,6 +75,14 @@ def run_digest(
     persist: bool = True,
 ) -> DigestResult:
     knowledge = knowledge if knowledge is not None else KnowledgeStore()
+
+    # CLOSE first (the "remove" half): consume Avigail's check-offs from the previous run's todos file
+    # (or email reply) and clear those todos before composing today's digest. Highest-confidence closure.
+    closed_from_feedback = 0
+    feedback = delivery.collect_feedback(run_date=run_date)
+    if feedback and feedback.eod_actuals:
+        closed_from_feedback = close_todos_from_feedback(projects, feedback.eod_actuals)
+
     cleaned = unify(threads, self_addresses=self_addresses)
     # N2: demote clear bulk/marketing so the model isn't buried in noise — but surface what we dropped.
     cleaned, filtered = partition_marketing(cleaned)
@@ -97,7 +109,12 @@ def run_digest(
     promote_work_contacts(projects, clients, contacts, run_date=run_date)
     apply_insights(output, clients, knowledge, run_date=run_date)
 
-    digest_md = render_digest_md(output, projects, run_date=run_date, filtered=filtered)
+    # DECAY pass: surface (don't delete) projects/todos that look finished or dormant, for confirmation.
+    suspected = suspected_closures(projects, run_date=run_date)
+
+    digest_md = render_digest_md(
+        output, projects, run_date=run_date, filtered=filtered, suspected=suspected
+    )
     todos_md = render_todos_md(
         prioritize(projects, run_date=run_date), run_date=run_date
     )
@@ -118,4 +135,6 @@ def run_digest(
         delivery=result,
         packet=packet,
         filtered=filtered,
+        closed_from_feedback=closed_from_feedback,
+        suspected=suspected,
     )

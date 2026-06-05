@@ -36,6 +36,9 @@ class ProjectUpdate:
     # None = field omitted (keep existing blockers); [] = explicitly clear them (F6).
     blockers: list[Blocker] | None = None
     todos: list[Todo] = field(default_factory=list)
+    # Todos the model judged COMPLETED this run (closure signal: approval/delivery/receipt/invoice).
+    # Matched by text against the project's open todos and removed by apply. The close half of "add".
+    closed_todos: list[str] = field(default_factory=list)
     # Soft tacit knowledge about this project (free-text notes); appended to project.observations.
     observations: list[str] = field(default_factory=list)
     deadline: str | None = None
@@ -73,6 +76,7 @@ class ProjectUpdate:
             evidence_thread_ids=list(d.get("evidence_thread_ids", [])),
             blockers=blockers,
             todos=[Todo.from_dict(t) for t in d.get("todos", [])],
+            closed_todos=list(d.get("closed_todos", [])),
             deadline=d.get("deadline"),
             deadline_kind=d.get("deadline_kind"),
             observations=list(d.get("observations", [])),

@@ -68,8 +68,10 @@ def _score(
     hard_soon = False
 
     # 1. Deadline pressure — closer hard deadline => higher; soft deadlines contribute less.
+    #    OVERDUE (days_to_due < 0) gets NO urgency boost (D1): a past deadline is most likely already
+    #    done and just not closed — it's surfaced as a "suspected done" item, not pushed to Urgent.
     days_to_due = _days_between(run_date, deadline)
-    if days_to_due is not None:
+    if days_to_due is not None and days_to_due >= 0:
         weight = 1.0 if deadline_kind == "hard" else 0.4
         score += max(0.0, 30 - days_to_due) * weight
         if deadline_kind == "hard" and days_to_due <= 2:
@@ -147,3 +149,101 @@ def prioritize(projects: list[Project], *, run_date: str) -> list[RankedTodo]:
     # Sort by score desc, then project_id asc, then todo text asc — fully deterministic.
     ranked.sort(key=lambda r: (-r.score, r.project_id, r.todo.text))
     return ranked
+
+
+# ── decay / closure (the "remove" half) ──────────────────────────────────────────
+
+
+@dataclass
+class Suspicion:
+    """A surfaced guess that something can be cleared — never auto-deleted, always confirmed."""
+
+    kind: str  # "dormant_project" | "overdue_todo" | "stale_todo"
+    project_id: str
+    title: str  # project title (dormant) or todo text (todo)
+    detail: (
+        str  # why we suspect it (e.g. "silent 41 days", "deadline 2026-04-01 passed")
+    )
+
+
+def _days(a: str | None, b: str | None) -> int | None:
+    return _days_between(a, b)
+
+
+def suspected_closures(
+    projects: list[Project],
+    *,
+    run_date: str,
+    dormant_after_days: int = 28,
+    stale_todo_after_days: int = 21,
+) -> list[Suspicion]:
+    """Decay pass: surface (do NOT delete) projects/todos that look finished or dormant.
+
+      * dormant_project: an active/blocked project with no activity for `dormant_after_days`.
+      * overdue_todo: a todo whose (hard or soft) deadline has passed — most likely already done.
+      * stale_todo: a todo on a project that's seen newer activity than the todo, for long enough that
+        the model never restating it suggests it's done.
+    These feed the digest's "Suspected done / dormant — confirm to clear" section.
+    """
+    out: list[Suspicion] = []
+    for p in projects:
+        if p.status in ("done", "archived"):
+            continue
+        silent = _days(p.last_activity_date, run_date)
+        if silent is not None and silent >= dormant_after_days:
+            out.append(
+                Suspicion(
+                    "dormant_project", p.project_id, p.title, f"silent {silent} days"
+                )
+            )
+
+        all_todos = [(None, t) for t in p.open_todos] + [
+            (tk.task_id, t) for tk in p.tasks for t in tk.open_todos
+        ]
+        for _task_id, todo in all_todos:
+            due = todo.due_hint or p.deadline
+            dd = _days(run_date, due)
+            if dd is not None and dd < 0:
+                out.append(
+                    Suspicion(
+                        "overdue_todo",
+                        p.project_id,
+                        todo.text,
+                        f"deadline {due} passed",
+                    )
+                )
+            else:
+                stale = _days(p.last_activity_date, run_date)
+                if stale is not None and stale >= stale_todo_after_days:
+                    out.append(
+                        Suspicion(
+                            "stale_todo",
+                            p.project_id,
+                            todo.text,
+                            f"untouched {stale} days",
+                        )
+                    )
+    return out
+
+
+def close_todos_from_feedback(projects: list[Project], done_items: list[str]) -> int:
+    """Remove open todos that Avigail checked off (the rendered line contains the todo text). Returns
+    the count closed. Highest-confidence closure: it's her explicit done-mark."""
+    done = [d.lower() for d in done_items]
+    closed = 0
+
+    def _filter(todos: list[Todo]) -> list[Todo]:
+        nonlocal closed
+        kept = []
+        for t in todos:
+            if any(t.text.lower() in d for d in done):
+                closed += 1
+            else:
+                kept.append(t)
+        return kept
+
+    for p in projects:
+        p.open_todos = _filter(p.open_todos)
+        for task in p.tasks:
+            task.open_todos = _filter(task.open_todos)
+    return closed

@@ -32,13 +32,14 @@ def render_digest_md(
     run_date: str,
     run_date_label: str | None = None,
     filtered: list | None = None,
+    suspected: list | None = None,
 ) -> str:
     ranked = prioritize(projects, run_date=run_date)
     lines: list[str] = [f"# Daily digest — {run_date_label or run_date}", ""]
 
-    # 1. Project status
+    # 1. Project status — only genuinely-active work (done/archived drop off; dormant is surfaced below).
     lines.append("## Project status")
-    visible = [p for p in projects if p.status != "archived"]
+    visible = [p for p in projects if p.status not in ("archived", "done")]
     visible.sort(
         key=lambda p: (
             _STATUS_ORDER.index(p.status) if p.status in _STATUS_ORDER else 99,
@@ -88,7 +89,24 @@ def render_digest_md(
             lines.append(f"- thread `{u.thread_id}`: {u.why}")
         lines.append("")
 
-    # 5. Filtered as bulk/marketing — surfaced (capped) so a misfire is visible, not silently dropped.
+    # 5. Suspected done / dormant — decay guesses surfaced for confirmation; NEVER auto-cleared.
+    if suspected:
+        lines.append("## Suspected done / dormant — confirm to clear")
+        dormant = [s for s in suspected if s.kind == "dormant_project"]
+        todos_s = [s for s in suspected if s.kind != "dormant_project"]
+        if dormant:
+            lines.append("_Projects gone quiet — still active?_")
+            for s in dormant:
+                lines.append(f"- **{s.title}** (`{s.project_id}`) — {s.detail}")
+        if todos_s:
+            lines.append("_TODOs likely already done — clear them?_")
+            for s in todos_s[:12]:
+                lines.append(f"- {s.title}  _({s.detail})_")
+            if len(todos_s) > 12:
+                lines.append(f"- _(+{len(todos_s) - 12} more)_")
+        lines.append("")
+
+    # 6. Filtered as bulk/marketing — surfaced (capped) so a misfire is visible, not silently dropped.
     if filtered:
         lines.append(
             f"## Filtered as bulk/marketing ({len(filtered)}) — flag any that matter"

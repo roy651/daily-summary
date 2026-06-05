@@ -173,10 +173,12 @@ def _cmd_daily(args, env: Mapping[str, str]) -> int:
         return 2
 
     log.info(
-        "daily: delivered=%s (%s); %d threads filtered as bulk/marketing",
+        "daily: delivered=%s (%s); %d filtered; %d todos closed from feedback; %d suspected to confirm",
         result.delivery.sent,
         result.delivery.detail,
         len(result.filtered),
+        result.closed_from_feedback,
+        len(result.suspected),
     )
     # Advance the watermark only after a successful, persisted, present-day delivery (never on replay).
     if (

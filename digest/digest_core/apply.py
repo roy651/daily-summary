@@ -17,7 +17,7 @@ import re
 from digest_core.knowledge import KnowledgeStore
 from digest_core.schema import ModelOutput, ProjectUpdate
 from digest_core.state import ClientProfile, Observation, Project
-from digest_core.todos import merge_todos
+from digest_core.todos import _norm_text, merge_todos
 
 
 def _append_observations(target, notes: list[str], run_date: str) -> None:
@@ -107,8 +107,18 @@ def _apply_one(
     # Effective lifecycle status: human override wins; else the agent's read.
     project.status = project.status_confirmed or project.status_agent or project.status
 
-    # Carry-forward-merge todos (surface, don't drop).
+    # Carry-forward-merge todos (surface, don't drop)...
     project.open_todos = merge_todos(project.open_todos, update.todos)
+    # ...then CLOSE the ones the model judged completed (evidence-based removal — the close half of add).
+    if update.closed_todos:
+        closed = {_norm_text(t) for t in update.closed_todos}
+        project.open_todos = [
+            t for t in project.open_todos if _norm_text(t.text) not in closed
+        ]
+        for task in project.tasks:
+            task.open_todos = [
+                t for t in task.open_todos if _norm_text(t.text) not in closed
+            ]
 
     # Accumulate tacit project knowledge.
     _append_observations(project, update.observations, run_date)
