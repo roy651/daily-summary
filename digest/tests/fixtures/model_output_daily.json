@@ -1,0 +1,91 @@
+{
+  "generated_at": "2026-06-05",
+  "project_updates": [
+    {
+      "project_id": "p-sprig-homepage",
+      "status_agent": "blocked",
+      "status_evidence": "SPRIG agent says the RhythMedix client copy will slip ~1 week; hold the build (<sprig-homepage-1@sprig.example>)",
+      "confidence": "high",
+      "evidence_thread_ids": ["<sprig-homepage-1@sprig.example>"],
+      "blockers": [
+        {
+          "kind": "awaiting_client_material",
+          "description": "final homepage copy from RhythMedix",
+          "since": "2026-06-05"
+        }
+      ],
+      "todos": [
+        {
+          "text": "Ask Avi (SPRIG) to forward the homepage copy as soon as the client sends it",
+          "category": "communicate_client",
+          "target": "agent@sprig.example",
+          "rationale": "this is the only thing blocking the homepage build",
+          "source_thread_id": "<sprig-homepage-1@sprig.example>"
+        }
+      ]
+    },
+    {
+      "project_id": null,
+      "client_id": "rhythmedix",
+      "title": "RhythMedix logo rebrand",
+      "assignee": "subcontractor",
+      "subcontractor": "dana@freelance.example",
+      "status_agent": "active",
+      "status_evidence": "Dana uploaded 3 logo variations and CC'd Avigail (<dana-logo-1@freelance.example>)",
+      "confidence": "high",
+      "evidence_thread_ids": ["<dana-logo-1@freelance.example>"],
+      "todos": [
+        {
+          "text": "Review Dana's 3 logo variations and tell her which direction to refine",
+          "category": "verify_subcontractor",
+          "target": "dana@freelance.example",
+          "rationale": "Dana is waiting on direction",
+          "source_thread_id": "<dana-logo-1@freelance.example>"
+        }
+      ]
+    },
+    {
+      "project_id": null,
+      "client_id": "studio-lev",
+      "title": "Tri-fold brochure",
+      "assignee": "self",
+      "status_agent": "active",
+      "status_evidence": "New inbound lead from Maya Lev for a July product-launch brochure (<lev-brochure-1@studio-lev.example>)",
+      "confidence": "med",
+      "evidence_thread_ids": ["<lev-brochure-1@studio-lev.example>"],
+      "deadline": "2026-07-01",
+      "deadline_kind": "soft",
+      "todos": [
+        {
+          "text": "Reply to Maya with availability and a rough quote",
+          "category": "communicate_client",
+          "target": "maya@studio-lev.example",
+          "due_hint": "2026-06-08",
+          "rationale": "new lead awaiting a response",
+          "source_thread_id": "<lev-brochure-1@studio-lev.example>"
+        }
+      ]
+    }
+  ],
+  "digest_updates": [
+    {
+      "project_id": "p-sprig-homepage",
+      "headline": "RhythMedix homepage blocked — client copy delayed ~1 week",
+      "detail": "SPRIG asked to hold the build until the final copy arrives.",
+      "importance": "high"
+    },
+    {
+      "project_id": null,
+      "headline": "New lead: tri-fold brochure (Studio Lev)",
+      "detail": "Maya Lev asked for availability and a quote for a July launch.",
+      "importance": "med"
+    },
+    {
+      "project_id": null,
+      "headline": "Dana posted 3 logo variations for the RhythMedix rebrand",
+      "detail": "Awaiting Avigail's pick on direction.",
+      "importance": "med"
+    }
+  ],
+  "unresolved": []
+}

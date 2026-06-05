@@ -1,0 +1,18 @@
+[
+  {
+    "client_id": "sprig",
+    "display_name": "SPRIG",
+    "is_agency": true,
+    "language": "en",
+    "status": "active",
+    "managing_contacts": [
+      {
+        "name": "Avi Cohen",
+        "email": "agent@sprig.example",
+        "role_note": "main agent I work through"
+      }
+    ],
+    "observations": [],
+    "notes": "agency; has end-clients (RhythMedix, ...)"
+  }
+]

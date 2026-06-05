@@ -7,7 +7,7 @@ file is the human-editable surface that FileDelivery reads back as feedback.
 from __future__ import annotations
 
 from digest_core.schema import ModelOutput
-from digest_core.state import Project
+from digest_core.state import ClientProfile, Project
 from digest_core.todos import BANDS, RankedTodo, prioritize
 
 # Lifecycle statuses shown in the digest, in display order. Archived projects are hidden.
@@ -112,4 +112,52 @@ def render_todos_md(ranked: list[RankedTodo], *, run_date: str) -> str:
                 f"({_client_label(r.client_id, r.end_client)}) <!-- {marker} -->"
             )
         lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_state_review_md(
+    clients: list[ClientProfile], projects: list[Project]
+) -> str:
+    """A human-readable snapshot of what the system believes, for Avigail to eyeball + correct.
+
+    Surfaces the accumulated client/project map (with confidence + soft observations) so she can
+    catch a misread. Corrections are made by hand-editing state/*.json (v1) or via feedback (phase 2).
+    """
+    lines: list[str] = ["# State review — what the system currently believes", ""]
+    lines.append(
+        "_Eyeball this and correct anything wrong: edit state/clients.json or state/projects.json "
+        "directly (round-trip-safe), or note it in your feedback._"
+    )
+    lines.append("")
+
+    active = [c for c in clients if c.status != "archived"]
+    lines.append("## Clients")
+    if not active:
+        lines.append("_None._")
+    for c in sorted(active, key=lambda c: c.client_id):
+        agency = " — agency" if c.is_agency else ""
+        contacts = ", ".join(f"{m.name} <{m.email}>" for m in c.managing_contacts)
+        lines.append(f"- **{c.display_name}** (`{c.client_id}`){agency}")
+        if contacts:
+            lines.append(f"  - contacts: {contacts}")
+        for o in c.observations:
+            lines.append(f"  - _{o.date}_: {o.note}")
+    lines.append("")
+
+    visible = [p for p in projects if p.status != "archived"]
+    lines.append("## Projects")
+    if not visible:
+        lines.append("_None._")
+    for p in sorted(visible, key=lambda p: (p.client_id, p.project_id)):
+        conf = f", confidence {p.confidence}" if p.confidence else ""
+        deadline = f", deadline {p.deadline} ({p.deadline_kind})" if p.deadline else ""
+        lines.append(
+            f"- **{p.title}** (`{p.project_id}`, {_client_label(p.client_id, p.end_client)}) "
+            f"— {p.status}{conf}{deadline}"
+        )
+        if p.status_reason:
+            lines.append(f"  - {p.status_reason}")
+        for o in p.observations:
+            lines.append(f"  - _{o.date}_: {o.note}")
+    lines.append("")
     return "\n".join(lines).rstrip() + "\n"

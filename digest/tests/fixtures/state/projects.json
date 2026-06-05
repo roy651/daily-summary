@@ -1,0 +1,29 @@
+[
+  {
+    "project_id": "p-sprig-homepage",
+    "client_id": "sprig",
+    "title": "RhythMedix homepage",
+    "description": "Marketing homepage build for the RhythMedix rebrand.",
+    "end_client": "rhythmedix",
+    "assignee": "self",
+    "subcontractor": null,
+    "contact_channel": "agent",
+    "status": "active",
+    "status_reason": "",
+    "deadline": null,
+    "deadline_kind": null,
+    "blockers": [],
+    "last_activity_date": "2026-05-28",
+    "last_seen_run": "2026-05-28",
+    "status_agent": "active",
+    "status_evidence": "",
+    "confidence": "med",
+    "evidence_thread_ids": [],
+    "status_confirmed": null,
+    "confirmed_note": null,
+    "tasks": [],
+    "open_todos": [],
+    "observations": [],
+    "notes": ""
+  }
+]

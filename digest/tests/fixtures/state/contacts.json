@@ -1,0 +1,14 @@
+{
+  "agent@sprig.example": {
+    "role": "agent",
+    "source": "bootstrap",
+    "reason": "SPRIG agent",
+    "added": "2026-05-01"
+  },
+  "dana@freelance.example": {
+    "role": "subcontractor",
+    "source": "bootstrap",
+    "reason": "logo/graphic subcontractor",
+    "added": "2026-05-01"
+  }
+}

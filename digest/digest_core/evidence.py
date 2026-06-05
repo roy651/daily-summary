@@ -12,9 +12,35 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from mail_evidence import (
+    ContactStore,
+    RelevanceJudge,
+    assemble_threads,
+    classify_tier,
+    condition,
+    dedup_in_thread,
+)
 from mail_evidence.records import EvidenceRecord, Thread
 
 from digest_core.relevance import is_self_generated
+
+
+def condition_records(
+    records: list[EvidenceRecord],
+    *,
+    judge: RelevanceJudge,
+    contact_store: ContactStore,
+) -> list[Thread]:
+    """Run the mail-evidence conditioning stages on already-fetched records (offline equivalent of
+    ``run()`` minus fetch/batching). Used by bootstrap and the offline daily path."""
+    survivors: list[Thread] = []
+    for thread in assemble_threads(records):
+        thread = dedup_in_thread(thread)
+        thread = classify_tier(thread, contact_store)
+        kept = condition(thread, judge, contact_store)
+        if kept is not None:
+            survivors.append(kept)
+    return survivors
 
 
 def direction_of(record: EvidenceRecord, self_addresses: Iterable[str]) -> str:

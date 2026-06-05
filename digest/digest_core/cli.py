@@ -1,0 +1,292 @@
+"""Headless entry point (docs/02-pipeline.md, RUNBOOK.md).
+
+A clean, unattended-capable CLI — no interactive prompts, config via env/flags, deterministic exit
+codes (0 ok, 1 usage/guard error, 2 model pass pending). Scheduling stays external (cron / launchd /
+Hermes invoke this). Subcommands: bootstrap | daily | feedback | review | show.
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+import sys
+from collections.abc import Mapping
+from datetime import date, timedelta
+from pathlib import Path
+
+from mail_evidence import ingest_email_export
+
+from digest_core.bootstrap import run_bootstrap
+from digest_core.contacts import DigestContactStore
+from digest_core.daily import run_digest
+from digest_core.delivery import select_delivery
+from digest_core.evidence import condition_records
+from digest_core.reasoner import SessionPending, select_reasoner
+from digest_core.relevance import KeepAllHumanJudge
+from digest_core.render import render_state_review_md
+from digest_core.state import (
+    ClientProfile,
+    Project,
+    load_clients,
+    load_projects,
+    write_clients,
+    write_projects,
+)
+
+log = logging.getLogger("digest")
+
+
+def _self_addresses(env: Mapping[str, str]) -> set[str]:
+    return {
+        a.strip().lower()
+        for a in (env.get("IMAP_USER", ""), env.get("DIGEST_EMAIL_TO", ""))
+        if a.strip()
+    }
+
+
+def _today() -> str:
+    return date.today().isoformat()
+
+
+def _load_state(
+    state_dir: Path,
+) -> tuple[list[Project], list[ClientProfile], DigestContactStore]:
+    projects = (
+        load_projects(state_dir / "projects.json")
+        if (state_dir / "projects.json").exists()
+        else []
+    )
+    clients = (
+        load_clients(state_dir / "clients.json")
+        if (state_dir / "clients.json").exists()
+        else []
+    )
+    contacts = DigestContactStore.load(state_dir / "contacts.json")
+    return projects, clients, contacts
+
+
+# ── subcommands ──────────────────────────────────────────────────────────────────
+
+
+def _cmd_bootstrap(args, env: Mapping[str, str]) -> int:
+    state_dir = Path(args.state_dir)
+    if (state_dir / "projects.json").exists() and not args.force:
+        log.error(
+            "state/projects.json already exists — refusing to clobber. Use --force to re-bootstrap."
+        )
+        return 1
+
+    export_root = args.export_root or env.get("SIBLING_EXPORT_ROOT")
+    if not export_root:
+        log.error("no export root: pass --export-root or set SIBLING_EXPORT_ROOT")
+        return 1
+
+    run_date = args.as_of or _today()
+    records = ingest_email_export(export_root)
+    reasoner = select_reasoner(
+        env, work_dir=state_dir, replay_path=env.get("REPLAY_OUTPUT")
+    )
+    try:
+        result = run_bootstrap(
+            records=records,
+            reasoner=reasoner,
+            run_date=run_date,
+            holdout_days=args.holdout_days,
+            self_addresses=_self_addresses(env),
+        )
+    except SessionPending as pending:
+        log.warning(str(pending))
+        return 2
+
+    log.info(
+        "bootstrap: %d projects, %d clients, %d contacts",
+        len(result.projects),
+        len(result.clients),
+        len(result.contacts.items()),
+    )
+    if args.dry_run:
+        log.info("dry-run: not writing state")
+        return 0
+    write_projects(result.projects, state_dir / "projects.json")
+    write_clients(result.clients, state_dir / "clients.json")
+    result.contacts.save(state_dir / "contacts.json")
+    return 0
+
+
+def _cmd_daily(args, env: Mapping[str, str]) -> int:
+    state_dir, out_dir = Path(args.state_dir), Path(args.out_dir)
+    projects, clients, contacts = _load_state(state_dir)
+    run_date = args.as_of or _today()
+    since = (
+        args.since
+        or (date.fromisoformat(run_date) - timedelta(days=args.window_days)).isoformat()
+    )
+
+    if args.from_export:
+        records = ingest_email_export(args.from_export)
+        threads = condition_records(
+            records, judge=KeepAllHumanJudge(), contact_store=contacts
+        )
+        watermark_commit = None
+    else:
+        threads, watermark_commit = _live_pull(env, contacts, state_dir)
+
+    reasoner = select_reasoner(
+        env, work_dir=state_dir, replay_path=env.get("REPLAY_OUTPUT")
+    )
+    delivery = select_delivery(env, out_dir=out_dir)
+    try:
+        result = run_digest(
+            projects=projects,
+            clients=clients,
+            contacts=contacts,
+            threads=threads,
+            reasoner=reasoner,
+            delivery=delivery,
+            run_date=run_date,
+            since=since,
+            self_addresses=_self_addresses(env),
+            state_dir=state_dir,
+            out_dir=out_dir,
+            persist=not args.dry_run,
+        )
+    except SessionPending as pending:
+        log.warning(str(pending))
+        return 2
+
+    log.info("daily: delivered=%s (%s)", result.delivery.sent, result.delivery.detail)
+    # Advance the watermark only after a successful, persisted delivery.
+    if watermark_commit is not None and result.delivery.sent and not args.dry_run:
+        watermark_commit()
+    return 0
+
+
+def _cmd_feedback(args, env: Mapping[str, str]) -> int:
+    run_date = args.as_of or _today()
+    delivery = select_delivery(env, out_dir=Path(args.out_dir))
+    feedback = delivery.collect_feedback(run_date=run_date)
+    if feedback is None:
+        log.info("no feedback found")
+        return 0
+    out = Path(args.state_dir) / "feedback" / f"feedback_{run_date}.json"
+    feedback.save(out)
+    log.info(
+        "feedback captured -> %s (%d done, %d open, %d suppressed)",
+        out,
+        len(feedback.eod_actuals),
+        len(feedback.revised_todos),
+        len(feedback.suppressed_threads),
+    )
+    return 0
+
+
+def _cmd_review(args, env: Mapping[str, str]) -> int:
+    projects, clients, _ = _load_state(Path(args.state_dir))
+    out = Path(args.out_dir) / "state-review.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(render_state_review_md(clients, projects), encoding="utf-8")
+    log.info("state review -> %s", out)
+    return 0
+
+
+def _cmd_show(args, env: Mapping[str, str]) -> int:
+    projects, clients, contacts = _load_state(Path(args.state_dir))
+    print(
+        f"clients: {len(clients)}  projects: {len(projects)}  contacts: {len(contacts.items())}"
+    )
+    for p in sorted(projects, key=lambda p: (p.client_id, p.project_id)):
+        print(f"  [{p.status}] {p.client_id}/{p.project_id}: {p.title}")
+    return 0
+
+
+def _live_pull(env: Mapping[str, str], contacts: DigestContactStore, state_dir: Path):
+    """Read-only IMAP pull via mail-evidence. Returns (threads, commit_watermark_callable)."""
+    from mail_evidence import (
+        FetchConfig,
+        ImapClient,
+        commit_watermark,
+        load_watermark,
+        run,
+    )
+
+    client = ImapClient.from_env(mailbox=env.get("IMAP_INBOX", "INBOX"))
+    watermark = load_watermark(state_dir)
+    threads = []
+    latest = watermark
+    for batch in run(FetchConfig(), KeepAllHumanJudge(), contacts, client, watermark):
+        threads.extend(batch)
+        for t in batch:
+            for r in t.records:
+                latest = r.date if latest is None or r.date > latest else latest
+
+    def commit():
+        if latest is not None:
+            commit_watermark(latest, state_dir)
+
+    return threads, commit
+
+
+# ── arg parsing ────────────────────────────────────────────────────────────────
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="digest_core.cli",
+        description="Avigail's daily business digest (read-only).",
+    )
+    sub = p.add_subparsers(dest="command", required=True)
+
+    b = sub.add_parser(
+        "bootstrap", help="one-shot cold-start map build from a mail export"
+    )
+    b.add_argument("--export-root")
+    b.add_argument("--holdout-days", type=int, default=7)
+    b.add_argument("--force", action="store_true")
+    b.add_argument("--dry-run", action="store_true")
+    b.add_argument("--as-of")
+    b.add_argument("--state-dir", default="state")
+    b.set_defaults(func=_cmd_bootstrap)
+
+    d = sub.add_parser("daily", help="produce + deliver today's digest")
+    d.add_argument("--state-dir", default="state")
+    d.add_argument("--out-dir", default="out")
+    d.add_argument("--as-of")
+    d.add_argument("--since")
+    d.add_argument("--window-days", type=int, default=1)
+    d.add_argument(
+        "--from-export", help="ingest a local mail export instead of a live IMAP pull"
+    )
+    d.add_argument("--dry-run", action="store_true")
+    d.set_defaults(func=_cmd_daily)
+
+    f = sub.add_parser(
+        "feedback", help="collect + persist Avigail's feedback (no model)"
+    )
+    f.add_argument("--state-dir", default="state")
+    f.add_argument("--out-dir", default="out")
+    f.add_argument("--as-of")
+    f.set_defaults(func=_cmd_feedback)
+
+    r = sub.add_parser("review", help="render the client/project map for review")
+    r.add_argument("--state-dir", default="state")
+    r.add_argument("--out-dir", default="out")
+    r.set_defaults(func=_cmd_review)
+
+    s = sub.add_parser("show", help="print current state (read-only)")
+    s.add_argument("--state-dir", default="state")
+    s.set_defaults(func=_cmd_show)
+    return p
+
+
+def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None) -> int:
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stderr
+    )
+    env = env if env is not None else os.environ
+    args = build_parser().parse_args(argv)
+    return args.func(args, env)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
