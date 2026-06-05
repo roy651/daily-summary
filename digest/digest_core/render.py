@@ -47,9 +47,17 @@ def render_digest_md(
     ]
     lines: list[str] = [f"# Daily digest — {run_date_label or run_date}", ""]
 
-    # 1. Project status — only genuinely-active work (done/archived drop off; dormant is surfaced below).
+    # 1. Project status — only genuinely-active work. Done/archived drop off; suspected-dormant move to
+    # the "confirm to clear" section below (so the status list isn't padded with quiet/finished work).
+    dormant_ids = {
+        s.project_id for s in (suspected or []) if s.kind == "dormant_project"
+    }
     lines.append("## Project status")
-    visible = [p for p in projects if p.status not in ("archived", "done")]
+    visible = [
+        p
+        for p in projects
+        if p.status not in ("archived", "done") and p.project_id not in dormant_ids
+    ]
     visible.sort(
         key=lambda p: (
             _STATUS_ORDER.index(p.status) if p.status in _STATUS_ORDER else 99,
