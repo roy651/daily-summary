@@ -1,8 +1,9 @@
 """Cold-start bootstrap — build the initial client/project map (docs/02-pipeline.md).
 
 Reads a batch of already-fetched records (the sibling's export, once), holds out the most recent
-week for ground-truth collection, conditions the rest, seeds the contact store, and runs a MODEL
-PASS to propose the opening project map. Best-effort by design: expect to hand-correct the result.
+week for ground-truth collection, conditions the rest, and runs a MODEL PASS to propose the opening
+project map. Contacts are then promoted from what the model tied to real work (not indiscriminate
+seeding). Best-effort by design: expect to hand-correct the result.
 """
 
 from __future__ import annotations
@@ -10,11 +11,15 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
-from email.utils import parseaddr
 
-from mail_evidence.records import EvidenceRecord, Thread
+from mail_evidence.records import EvidenceRecord
 
-from digest_core.apply import apply_insights, apply_model_output
+from digest_core.apply import (
+    apply_insights,
+    apply_model_output,
+    promote_work_contacts,
+    upsert_clients,
+)
 from digest_core.contacts import DigestContactStore
 from digest_core.evidence import condition_records
 from digest_core.knowledge import KnowledgeStore
@@ -37,45 +42,6 @@ class BootstrapResult:
     clients: list[ClientProfile]
     contacts: DigestContactStore
     knowledge: KnowledgeStore
-
-
-def _human_addresses(record: EvidenceRecord, self_addresses: set[str]) -> list[str]:
-    if record.source != "email":
-        return []
-    raw = [record.from_, *record.to, *record.cc]
-    out = []
-    for r in raw:
-        if not r:
-            continue
-        addr = (parseaddr(r)[1] or r).strip().lower()
-        if addr and addr not in self_addresses:
-            out.append(addr)
-    return out
-
-
-def _seed_contacts(
-    threads: list[Thread], contacts: DigestContactStore, self_addresses: set[str]
-) -> None:
-    # Roles are seeded as "other"; the model's packet + manual review refine them later. (Richer
-    # role inference is a deliberate phase-2 nicety, not an MVP blocker.)
-    for t in threads:
-        for r in t.records:
-            for addr in _human_addresses(r, self_addresses):
-                if not contacts.is_known(addr):
-                    contacts.add(addr, role="other", source="bootstrap")
-
-
-def _derive_clients(
-    projects: list[Project], existing: list[ClientProfile] | None = None
-) -> list[ClientProfile]:
-    known = {c.client_id: c for c in (existing or [])}
-    for p in projects:
-        if p.client_id and p.client_id not in known:
-            known[p.client_id] = ClientProfile(
-                client_id=p.client_id,
-                display_name=p.client_id.replace("-", " ").replace("_", " ").title(),
-            )
-    return [known[k] for k in sorted(known)]
 
 
 def run_bootstrap(
@@ -101,7 +67,6 @@ def run_bootstrap(
 
     contacts = contacts or DigestContactStore()
     threads = condition_records(kept, judge=KeepAllHumanJudge(), contact_store=contacts)
-    _seed_contacts(threads, contacts, self_addresses)
 
     since = min((r.date.date().isoformat() for r in kept), default=cutoff.isoformat())
     packet = build_reasoning_packet(
@@ -118,7 +83,9 @@ def run_bootstrap(
     )
     output = reasoner.reason(packet)
     projects = apply_model_output([], output, run_date=run_date, thread_dates={})
-    clients = _derive_clients(projects)
+    clients = upsert_clients(projects)
+    # Reasoning-based contact promotion: only people the model tied to real work become known (+roles).
+    promote_work_contacts(output, contacts, run_date=run_date)
     apply_insights(output, clients, knowledge, run_date=run_date)
     return BootstrapResult(
         projects=projects, clients=clients, contacts=contacts, knowledge=knowledge

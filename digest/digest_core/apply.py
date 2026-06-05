@@ -158,9 +158,13 @@ def apply_model_output(
             result.append(_new_project(update, run_date, thread_dates))
         else:
             _apply_one(match, update, run_date, thread_dates)
+    # R1: an explicit raise (not assert) so this non-negotiable invariant survives `python -O`.
     for p in result:
-        if id(p) in confirmed_before:
-            assert (p.status_confirmed, p.confirmed_note) == confirmed_before[id(p)], (
+        if (
+            id(p) in confirmed_before
+            and (p.status_confirmed, p.confirmed_note) != confirmed_before[id(p)]
+        ):
+            raise RuntimeError(
                 f"apply must never write human-confirmed columns (project {p.project_id})"
             )
     return result
@@ -181,3 +185,62 @@ def apply_insights(
             knowledge.add_general(ins.note, date=run_date)
         else:
             _append_observations(by_id[ins.scope], [ins.note], run_date)
+
+
+def upsert_clients(
+    projects: list[Project], existing: list[ClientProfile] | None = None
+) -> list[ClientProfile]:
+    """Ensure every project's client_id has a ClientProfile (K3). Existing profiles are preserved
+    untouched (incl. human edits like is_agency); only missing clients get a stub. Used by both
+    bootstrap (cold start from []) and daily (new clients discovered after bootstrap)."""
+    known = {c.client_id: c for c in (existing or [])}
+    for p in projects:
+        if p.client_id and p.client_id not in known:
+            known[p.client_id] = ClientProfile(
+                client_id=p.client_id,
+                display_name=p.client_id.replace("-", " ").replace("_", " ").title(),
+            )
+    return [known[k] for k in sorted(known)]
+
+
+_EMAIL_RE = re.compile(r"[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+")
+
+
+def _looks_like_email(value: str | None) -> bool:
+    return bool(value and _EMAIL_RE.fullmatch(value.strip()))
+
+
+def promote_work_contacts(output: ModelOutput, contacts, *, run_date: str) -> None:
+    """Add to the contact store the people the MODEL attached to real work this run (the reasoning
+    test: 'was there genuine work correspondence?'). Roles are inferred from how the model used them:
+      * a project's subcontractor                       -> subcontractor
+      * a verify_subcontractor todo target              -> subcontractor
+      * a communicate_client todo target on agency work -> agent (reached via the agent)
+      * a communicate_client todo target on direct work -> client
+    This replaces indiscriminate bootstrap seeding, so only work-relevant contacts become known/T1."""
+    for u in output.project_updates:
+        if _looks_like_email(u.subcontractor):
+            contacts.add(
+                u.subcontractor,
+                role="subcontractor",
+                source="model",
+                reason="project subcontractor",
+                added=run_date,
+            )
+        is_agency_work = bool(u.end_client)
+        for todo in u.todos:
+            if not _looks_like_email(todo.target):
+                continue
+            if todo.category == "verify_subcontractor":
+                role = "subcontractor"
+            elif todo.category == "communicate_client":
+                role = "agent" if is_agency_work else "client"
+            else:
+                continue
+            contacts.add(
+                todo.target,
+                role=role,
+                source="model",
+                reason=f"{todo.category} target",
+                added=run_date,
+            )

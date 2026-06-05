@@ -63,9 +63,16 @@ class DigestContactStore:
                 f"invalid contact role: {role!r} (allowed: {sorted(CONTACT_ROLES)})"
             )
         key = _norm_email(email)
-        # Don't downgrade a known role to "other" on a later auto-promotion.
+        # Inferred sources (auto/model) never override an already-established specific role — they
+        # can only fill in an unknown ("other") one. This keeps the first confident role sticky and
+        # avoids run-to-run flip-flop; explicit sources (bootstrap/manual) always win.
         existing = self._contacts.get(key)
-        if existing and source == "auto" and existing.role != "other":
+        if (
+            existing
+            and existing.role != "other"
+            and source in ("auto", "model")
+            and role != existing.role
+        ):
             return
         self._contacts[key] = ContactEntry(
             role=role, source=source, reason=reason, added=added

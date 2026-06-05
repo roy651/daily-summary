@@ -31,6 +31,7 @@ def render_digest_md(
     *,
     run_date: str,
     run_date_label: str | None = None,
+    filtered: list | None = None,
 ) -> str:
     ranked = prioritize(projects, run_date=run_date)
     lines: list[str] = [f"# Daily digest — {run_date_label or run_date}", ""]
@@ -85,6 +86,23 @@ def render_digest_md(
         lines.append("## Needs your eye")
         for u in output.unresolved:
             lines.append(f"- thread `{u.thread_id}`: {u.why}")
+        lines.append("")
+
+    # 5. Filtered as bulk/marketing — surfaced (capped) so a misfire is visible, not silently dropped.
+    if filtered:
+        lines.append(
+            f"## Filtered as bulk/marketing ({len(filtered)}) — flag any that matter"
+        )
+        for t in filtered[:8]:
+            subj = (
+                (t.records[0].subject or "(no subject)").strip()
+                if t.records
+                else "(empty)"
+            )
+            sender = (t.records[0].from_ or "?") if t.records else "?"
+            lines.append(f"- {subj}  — _{sender}_")
+        if len(filtered) > 8:
+            lines.append(f"- _(+{len(filtered) - 8} more)_")
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"

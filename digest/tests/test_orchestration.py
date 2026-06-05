@@ -122,10 +122,18 @@ def test_run_bootstrap_holds_out_recent_week_and_builds_map(tmp_path):
                 {
                     "project_id": None,
                     "client_id": "sprig",
+                    "end_client": "rhythmedix",
                     "title": "RhythMedix site",
                     "status_agent": "active",
+                    "subcontractor": "dana@freelance.example",
                     "evidence_thread_ids": ["t-old"],
-                    "todos": [],
+                    "todos": [
+                        {
+                            "text": "ask Avi about copy",
+                            "category": "communicate_client",
+                            "target": "agent@sprig.example",
+                        }
+                    ],
                 }
             ]
         },
@@ -142,6 +150,12 @@ def test_run_bootstrap_holds_out_recent_week_and_builds_map(tmp_path):
     assert any(p.title == "RhythMedix site" for p in result.projects)
     # Derived a client stub.
     assert any(c.client_id == "sprig" for c in result.clients)
-    # Seeded the old sender, but NOT the held-out recent lead.
-    assert result.contacts.is_known("agent@sprig.example")
+    # Reasoning-based promotion: only people the model tied to real work become contacts, with roles.
+    # The agent is a communicate_client target on AGENCY work (end_client set) -> role "agent".
+    assert result.contacts.role_of("agent@sprig.example") == "agent"
+    assert result.contacts.role_of("dana@freelance.example") == "subcontractor"
+    # A one-off inbound sender the model didn't attach to any work is NOT promoted (fixes N1 at root).
     assert not result.contacts.is_known("newlead@fresh.example")
+    assert not result.contacts.is_known(
+        "agent@sprig.example".replace("agent", "stranger")
+    )

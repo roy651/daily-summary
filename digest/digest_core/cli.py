@@ -172,7 +172,12 @@ def _cmd_daily(args, env: Mapping[str, str]) -> int:
         log.warning(str(pending))
         return 2
 
-    log.info("daily: delivered=%s (%s)", result.delivery.sent, result.delivery.detail)
+    log.info(
+        "daily: delivered=%s (%s); %d threads filtered as bulk/marketing",
+        result.delivery.sent,
+        result.delivery.detail,
+        len(result.filtered),
+    )
     # Advance the watermark only after a successful, persisted, present-day delivery (never on replay).
     if (
         watermark_commit is not None
