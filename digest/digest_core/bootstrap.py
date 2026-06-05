@@ -88,7 +88,7 @@ def run_bootstrap(
     projects = apply_model_output([], output, run_date=run_date, thread_dates={})
     clients = upsert_clients(projects)
     # Reasoning-based contact promotion: only people the model tied to real work become known (+roles).
-    promote_work_contacts(projects, contacts, run_date=run_date)
+    promote_work_contacts(projects, clients, contacts, run_date=run_date)
     apply_insights(output, clients, knowledge, run_date=run_date)
     return BootstrapResult(
         projects=projects, clients=clients, contacts=contacts, knowledge=knowledge

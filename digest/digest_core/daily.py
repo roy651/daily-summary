@@ -94,7 +94,7 @@ def run_digest(
     # K3: ensure clients discovered this run have a profile; then promote the work contacts the model
     # attached to real work (the reasoning test) and route tacit-knowledge insights.
     clients = upsert_clients(projects, clients)
-    promote_work_contacts(projects, contacts, run_date=run_date)
+    promote_work_contacts(projects, clients, contacts, run_date=run_date)
     apply_insights(output, clients, knowledge, run_date=run_date)
 
     digest_md = render_digest_md(output, projects, run_date=run_date, filtered=filtered)

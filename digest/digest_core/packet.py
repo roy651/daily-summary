@@ -26,9 +26,12 @@ _MAX_EVIDENCE_IDS = 25
 GLOSSARY = (
     "Avigail is a freelance designer (studio 'ula'). Her biggest client, SPRIG, is an AGENCY with "
     "its own end-clients: she usually works through a SPRIG agent but sometimes with the end-client "
-    "directly. Her subcontractors usually work through her but sometimes deal with clients directly "
-    "and CC her. Projects vary: some have hard deadlines, many are long-running and frequently "
-    "on-hold awaiting client material, consent, or another blocker."
+    "directly. NOTE: SPRIG can also be a client of its OWN — work Avigail does for the agency itself "
+    "(e.g. via its managers like Katie) is 'agency-direct': model it as client_id=sprig with "
+    "end_client=null (vs end-client work where end_client is set). Such managers are still AGENTS, not "
+    "clients. Her subcontractors usually work through her but sometimes deal with clients directly and "
+    "CC her. Projects vary: some have hard deadlines, many are long-running and frequently on-hold "
+    "awaiting client material, consent, or another blocker."
 )
 
 

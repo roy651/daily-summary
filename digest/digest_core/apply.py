@@ -210,19 +210,24 @@ def _looks_like_email(value: str | None) -> bool:
     return bool(value and _EMAIL_RE.fullmatch(value.strip()))
 
 
-def promote_work_contacts(projects: list[Project], contacts, *, run_date: str) -> None:
+def promote_work_contacts(
+    projects: list[Project], clients: list[ClientProfile], contacts, *, run_date: str
+) -> None:
     """Add to the contact store the people the model tied to real work (the reasoning test: 'was there
-    genuine work correspondence?'). Derived from the MERGED project state — not the raw per-run output —
-    so agency-vs-direct is resolved from the project's own ``end_client`` (an update that omits it can't
-    mis-tag a known agent). Roles:
+    genuine work correspondence?'). Derived from the MERGED project state. Roles:
       * a project's subcontractor                       -> subcontractor
       * a verify_subcontractor todo target              -> subcontractor
-      * a communicate_client todo target on agency work -> agent (reached via the agent)
-      * a communicate_client todo target on direct work -> client
+      * a communicate_client todo target on AGENCY work -> agent (reached via the agent)
+      * a communicate_client todo target on DIRECT work -> client
+    "Agency work" = the project's client is an agency (e.g. SPRIG) — whether for one of the agency's
+    end-clients (``end_client`` set) OR for the agency itself (``end_client`` None, e.g. SPRIG-direct
+    work). Keying off the client's ``is_agency`` (not merely ``end_client``) correctly tags an agency
+    manager like Katie on SPRIG-direct work as an *agent*, not a client.
     This replaces indiscriminate bootstrap seeding, so only work-relevant contacts become known/T1."""
+    agency_clients = {c.client_id for c in clients if c.is_agency}
 
     def _promote(p: Project, todos) -> None:
-        is_agency_work = bool(p.end_client)
+        is_agency_work = p.client_id in agency_clients or bool(p.end_client)
         for todo in todos:
             if not _looks_like_email(todo.target):
                 continue

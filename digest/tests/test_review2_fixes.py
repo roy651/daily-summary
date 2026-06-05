@@ -21,13 +21,14 @@ from digest_core.state import ClientProfile, Project
 # ── N1/N3: reasoning-based contact promotion ──
 
 
-def _promote(output_dict):
+def _promote(output_dict, clients=None):
     # Promotion derives from the merged project state, so apply the output first, then promote.
     contacts = DigestContactStore()
     projects = apply_model_output(
         [], ModelOutput.from_dict(output_dict), run_date="2026-05-15"
     )
-    promote_work_contacts(projects, contacts, run_date="2026-05-15")
+    clients = clients if clients is not None else upsert_clients(projects)
+    promote_work_contacts(projects, clients, contacts, run_date="2026-05-15")
     return contacts
 
 
@@ -135,8 +136,34 @@ def test_inferred_role_does_not_flip_established_role():
         ),
         run_date="2026-05-15",
     )
-    promote_work_contacts(projects, c, run_date="2026-05-15")
+    promote_work_contacts(projects, upsert_clients(projects), c, run_date="2026-05-15")
     assert c.role_of("molly@sprig.example") == "agent"
+
+
+def test_communicate_target_on_agency_direct_work_is_agent():
+    # SPRIG-direct work: client is an agency but the project has NO end_client (work for SPRIG itself).
+    # The contact (Katie, a SPRIG manager) must still be an AGENT, not a client.
+    agency = [ClientProfile(client_id="sprig", display_name="SPRIG", is_agency=True)]
+    c = _promote(
+        {
+            "project_updates": [
+                {
+                    "project_id": None,
+                    "client_id": "sprig",
+                    "title": "SPRIG-direct update work",
+                    "todos": [
+                        {
+                            "text": "ask Katie",
+                            "category": "communicate_client",
+                            "target": "katie@sprig.example",
+                        }
+                    ],
+                }
+            ]
+        },
+        clients=agency,
+    )
+    assert c.role_of("katie@sprig.example") == "agent"
 
 
 # ── K3: client upsert ──
