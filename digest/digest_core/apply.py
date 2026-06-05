@@ -123,12 +123,16 @@ def _apply_one(
     # Accumulate tacit project knowledge.
     _append_observations(project, update.observations, run_date)
 
-    # Observed-truth: advance last_activity_date from evidence only, never regress.
+    # Observed-truth: advance last_activity_date from evidence, never regress. When precise evidence
+    # dates aren't available, a project the model TOUCHED this run still had activity — floor it at the
+    # run date so the decay/dormancy clock is meaningful (untouched projects keep their old date and age).
     ev_date = _max_evidence_date(project.evidence_thread_ids, thread_dates)
     if ev_date and (
         project.last_activity_date is None or ev_date > project.last_activity_date
     ):
         project.last_activity_date = ev_date
+    elif project.last_activity_date is None or project.last_activity_date < run_date:
+        project.last_activity_date = run_date
 
     project.last_seen_run = run_date
 
