@@ -74,10 +74,18 @@ The removal/decay model is now implemented and exercised on the real Feb→May s
 **Real before/after (May digest):** Project status 22→13 active; TODO list 65→26 active; 22 items
 surfaced to confirm. 114 tests green.
 
-**Still open (next):** (a) consume a *project*-level dormancy confirmation (today a dormant project is
-surfaced but archiving it still needs a model `status:archived` or hand-edit — a simple `archive:`/
-`done:` feedback directive would close the loop); (b) populate `evidence_thread_ids` so last_activity
-uses precise dates, not the run-date floor; (c) cap rendered suspected list (currently capped at 12).
+**Also built (commit b5a15d2):**
+- **Invoice-based reversible auto-archive** — `ProjectUpdate.billed` sets `Project.billed_on`; a
+  fully-billed project silent ≥7 days auto-archives (`auto_archive_billed`); a later NEW item revives it
+  to active and clears the billing cycle (`_apply_one`). Skips human-confirmed-active projects.
+- **Feedback archive/revive** — `# archive: <id>` / `# revive: <id>` (todos file) and `archive:` /
+  `revive:` (email reply) are parsed and applied as a soft, reversible status set — the human
+  confirmation that closes the dormancy loop.
+
+**Still open (smaller):** (a) populate `evidence_thread_ids` so `last_activity` uses precise dates, not
+the run-date floor; (b) "billed-in-full" currently relies on the model flagging it from the mail — a
+real billing integration (sibling invoicing-assistant) would make it authoritative; (c) the digest
+could pre-list the `# archive:` ids next to each suspected-dormant project for one-line confirmation.
 
 ## D0 (ROOT) — The system is add-only: no removal / closure / decay model
 
