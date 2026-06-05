@@ -73,9 +73,14 @@ def _max_evidence_date(
 def _apply_one(
     project: Project, update: ProjectUpdate, run_date: str, thread_dates: dict[str, str]
 ) -> None:
+    prev_status = project.status
     # Agent-proposed columns (rewritten each run).
     if update.status_agent is not None:
         project.status_agent = update.status_agent
+    if update.billed:
+        project.billed_on = (
+            run_date  # fully invoiced -> eligible for billed+silence auto-archive
+        )
     project.status_evidence = update.status_evidence
     if update.confidence is not None:
         project.confidence = update.confidence
@@ -106,6 +111,13 @@ def _apply_one(
 
     # Effective lifecycle status: human override wins; else the agent's read.
     project.status = project.status_confirmed or project.status_agent or project.status
+    # Revival (reversible closure): a done/archived project that's active again got a NEW item — start a
+    # fresh billing cycle so it isn't immediately re-archived by the billed+silence rule.
+    if prev_status in ("done", "archived") and project.status not in (
+        "done",
+        "archived",
+    ):
+        project.billed_on = None
 
     # Carry-forward-merge todos (surface, don't drop)...
     project.open_todos = merge_todos(project.open_todos, update.todos)

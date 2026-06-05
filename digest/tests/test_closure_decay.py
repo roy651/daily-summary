@@ -163,3 +163,99 @@ def test_overdue_deadline_not_urgent():
     ]
     ranked = prioritize(projs, run_date="2026-05-18")
     assert ranked[0].band != "urgent"  # past hard deadline no longer inflates to Urgent
+
+
+# ── invoice-based reversible project closure ──
+
+
+def test_billed_plus_silence_auto_archives():
+    from digest_core.todos import auto_archive_billed
+
+    projs = [
+        Project(
+            project_id="p1",
+            client_id="c",
+            title="t",
+            status="active",
+            last_activity_date="2026-05-01",
+            billed_on="2026-05-01",
+        )
+    ]
+    archived = auto_archive_billed(
+        projs, run_date="2026-05-18", silent_days=7
+    )  # silent 17d
+    assert archived == ["p1"] and projs[0].status == "archived"
+
+
+def test_billed_but_recent_not_archived():
+    from digest_core.todos import auto_archive_billed
+
+    projs = [
+        Project(
+            project_id="p1",
+            client_id="c",
+            title="t",
+            status="active",
+            last_activity_date="2026-05-16",
+            billed_on="2026-05-16",
+        )
+    ]
+    assert (
+        auto_archive_billed(projs, run_date="2026-05-18", silent_days=7) == []
+    )  # only 2d silent
+
+
+def test_human_confirmed_active_not_auto_archived():
+    from digest_core.todos import auto_archive_billed
+
+    projs = [
+        Project(
+            project_id="p1",
+            client_id="c",
+            title="t",
+            status="active",
+            status_confirmed="active",
+            last_activity_date="2026-05-01",
+            billed_on="2026-05-01",
+        )
+    ]
+    assert auto_archive_billed(projs, run_date="2026-05-18") == []
+
+
+def test_billed_flag_sets_billed_on_and_revival_clears_it():
+    # Model flags billed -> billed_on set.
+    projs = [Project(project_id="p1", client_id="c", title="t", status="active")]
+    projs = apply_model_output(
+        projs,
+        ModelOutput.from_dict(
+            {
+                "project_updates": [
+                    {"project_id": "p1", "status_agent": "active", "billed": True}
+                ]
+            }
+        ),
+        run_date="2026-05-01",
+    )
+    assert projs[0].billed_on == "2026-05-01"
+    # It then archives on silence...
+    from digest_core.todos import auto_archive_billed
+
+    auto_archive_billed(projs, run_date="2026-05-18")
+    assert projs[0].status == "archived"
+    # ...and a NEW item revives it (status active) and clears the billing cycle.
+    projs = apply_model_output(
+        projs,
+        ModelOutput.from_dict(
+            {"project_updates": [{"project_id": "p1", "status_agent": "active"}]}
+        ),
+        run_date="2026-05-20",
+    )
+    assert projs[0].status == "active" and projs[0].billed_on is None
+
+
+def test_feedback_archive_and_revive_directives():
+    from digest_core.feedback import parse_reply
+
+    fb = parse_reply("archive: p1 p2\nrevive: p3", run_date="2026-05-18")
+    assert fb.archived_projects == ["p1", "p2"]
+    assert fb.revived_projects == ["p3"]

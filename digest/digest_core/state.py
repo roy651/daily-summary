@@ -191,6 +191,9 @@ class Project:
     blockers: list[Blocker] = field(default_factory=list)
     last_activity_date: str | None = None  # OBSERVED-TRUTH (max evidence date)
     last_seen_run: str | None = None
+    billed_on: str | None = (
+        None  # set when fully invoiced; billed + silence -> auto-archive (reversible)
+    )
 
     # Agent-proposed read (rewritten each run by the MODEL PASS)
     status_agent: str | None = None
@@ -233,6 +236,7 @@ class Project:
             blockers=[Blocker.from_dict(b) for b in d.get("blockers", [])],
             last_activity_date=d.get("last_activity_date"),
             last_seen_run=d.get("last_seen_run"),
+            billed_on=d.get("billed_on"),
             status_agent=d.get("status_agent"),
             status_evidence=d.get("status_evidence", ""),
             confidence=d.get("confidence"),

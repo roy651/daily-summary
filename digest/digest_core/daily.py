@@ -29,7 +29,12 @@ from digest_core.relevance import partition_marketing
 from digest_core.render import render_digest_md, render_todos_md
 from digest_core.schema import ModelOutput
 from digest_core.state import ClientProfile, Project, write_clients, write_projects
-from digest_core.todos import close_todos_from_feedback, prioritize, suspected_closures
+from digest_core.todos import (
+    auto_archive_billed,
+    close_todos_from_feedback,
+    prioritize,
+    suspected_closures,
+)
 
 
 @dataclass
@@ -80,8 +85,21 @@ def run_digest(
     # (or email reply) and clear those todos before composing today's digest. Highest-confidence closure.
     closed_from_feedback = 0
     feedback = delivery.collect_feedback(run_date=run_date)
-    if feedback and feedback.eod_actuals:
-        closed_from_feedback = close_todos_from_feedback(projects, feedback.eod_actuals)
+    if feedback:
+        if feedback.eod_actuals:
+            closed_from_feedback = close_todos_from_feedback(
+                projects, feedback.eod_actuals
+            )
+        # Human-triggered project closure/revival (the other dormancy trigger). Soft archive: a later
+        # new item revives it (apply flips status back), so we don't lock status_confirmed here.
+        by_id = {p.project_id: p for p in projects}
+        for pid in feedback.archived_projects:
+            if pid in by_id:
+                by_id[pid].status = "archived"
+        for pid in feedback.revived_projects:
+            if pid in by_id:
+                by_id[pid].status = "active"
+                by_id[pid].billed_on = None
 
     cleaned = unify(threads, self_addresses=self_addresses)
     # N2: demote clear bulk/marketing so the model isn't buried in noise — but surface what we dropped.
@@ -108,6 +126,10 @@ def run_digest(
     clients = upsert_clients(projects, clients)
     promote_work_contacts(projects, clients, contacts, run_date=run_date)
     apply_insights(output, clients, knowledge, run_date=run_date)
+
+    # Evidence-based reversible closure: fully-billed + silent projects auto-archive (billed this run
+    # had its activity floored to run_date, so it won't archive until silence actually accrues).
+    auto_archive_billed(projects, run_date=run_date)
 
     # DECAY pass: surface (don't delete) projects/todos that look finished or dormant, for confirmation.
     suspected = suspected_closures(projects, run_date=run_date)

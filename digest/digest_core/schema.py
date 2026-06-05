@@ -43,6 +43,8 @@ class ProjectUpdate:
     observations: list[str] = field(default_factory=list)
     deadline: str | None = None
     deadline_kind: str | None = None
+    # The model saw the project fully invoiced this run (billed-in-full). With ~7d silence -> auto-archive.
+    billed: bool = False
     # Required only for new projects (project_id is None):
     client_id: str | None = None
     end_client: str | None = None
@@ -79,6 +81,7 @@ class ProjectUpdate:
             closed_todos=list(d.get("closed_todos", [])),
             deadline=d.get("deadline"),
             deadline_kind=d.get("deadline_kind"),
+            billed=bool(d.get("billed", False)),
             observations=list(d.get("observations", [])),
             client_id=d.get("client_id"),
             end_client=d.get("end_client"),

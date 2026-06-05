@@ -257,3 +257,20 @@ def close_todos_from_feedback(projects: list[Project], done_items: list[str]) ->
         for task in p.tasks:
             task.open_todos = _filter(task.open_todos)
     return closed
+
+
+def auto_archive_billed(
+    projects: list[Project], *, run_date: str, silent_days: int = 7
+) -> list[str]:
+    """Evidence-based, REVERSIBLE project closure: a fully-billed project (``billed_on`` set) with no
+    new activity for ``silent_days`` is archived automatically. Skips human-confirmed-active projects.
+    Revival is handled in apply (a new item flips it back to active and clears ``billed_on``).
+    Returns the archived project ids."""
+    archived: list[str] = []
+    for p in projects:
+        if p.status == "active" and p.billed_on and not p.status_confirmed:
+            silent = _days(p.last_activity_date, run_date)
+            if silent is not None and silent >= silent_days:
+                p.status = "archived"
+                archived.append(p.project_id)
+    return archived

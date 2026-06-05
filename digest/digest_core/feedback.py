@@ -29,6 +29,12 @@ class FeedbackRecord:
     suppressed_threads: list[str] = field(
         default_factory=list
     )  # threads Avigail flagged off
+    archived_projects: list[str] = field(
+        default_factory=list
+    )  # project ids she confirmed done/dormant -> archive
+    revived_projects: list[str] = field(
+        default_factory=list
+    )  # project ids to bring back to active
     freeform_notes: str = ""
 
     def save(self, path: str | Path) -> None:
@@ -63,6 +69,10 @@ def parse_todos_md(text: str, *, run_date: str) -> FeedbackRecord:
             fb.revised_todos.append(_clean(m.group(1)))
         elif line.lower().startswith("# suppress:"):
             fb.suppressed_threads.extend(_thread_ids(line.split(":", 1)[1]))
+        elif line.lower().startswith("# archive:"):
+            fb.archived_projects.extend(_thread_ids(line.split(":", 1)[1]))
+        elif line.lower().startswith("# revive:"):
+            fb.revived_projects.extend(_thread_ids(line.split(":", 1)[1]))
         elif line.lower().startswith("# notes:"):
             notes.append(line.split(":", 1)[1].strip())
     fb.freeform_notes = " ".join(notes)
@@ -81,6 +91,10 @@ def parse_reply(body: str, *, run_date: str) -> FeedbackRecord:
             fb.eod_actuals.append(stripped.split(":", 1)[1].strip())
         elif lower.startswith("suppress:"):
             fb.suppressed_threads.extend(_thread_ids(stripped.split(":", 1)[1]))
+        elif lower.startswith("archive:"):
+            fb.archived_projects.extend(_thread_ids(stripped.split(":", 1)[1]))
+        elif lower.startswith("revive:"):
+            fb.revived_projects.extend(_thread_ids(stripped.split(":", 1)[1]))
         else:
             notes.append(stripped)
     fb.freeform_notes = " ".join(notes)
