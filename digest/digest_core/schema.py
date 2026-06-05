@@ -1,0 +1,123 @@
+"""ModelOutput — the contract the MODEL PASS must satisfy (docs/05-model-seam.md).
+
+Parsing validates loudly: unknown enum values and missing required fields raise here, before
+apply.py touches state. The model proposes; the deterministic layer applies — so this is where we
+refuse to let bad output through.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+from digest_core.state import (
+    PROJECT_STATUSES,
+    Blocker,
+    Todo,
+    _check,
+)
+
+CONFIDENCES = frozenset({"high", "med", "low"})
+IMPORTANCES = frozenset({"high", "med", "low"})
+
+
+@dataclass
+class ProjectUpdate:
+    project_id: (
+        str | None
+    )  # None => newly discovered project (client_id + title then required)
+    status_agent: str | None = None
+    status_evidence: str = ""
+    confidence: str | None = None
+    evidence_thread_ids: list[str] = field(default_factory=list)
+    blockers: list[Blocker] = field(default_factory=list)
+    todos: list[Todo] = field(default_factory=list)
+    deadline: str | None = None
+    deadline_kind: str | None = None
+    # Required only for new projects (project_id is None):
+    client_id: str | None = None
+    end_client: str | None = None
+    title: str | None = None
+    assignee: str | None = None
+    subcontractor: str | None = None
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ProjectUpdate:
+        project_id = d.get("project_id")
+        if project_id is None:
+            if not d.get("client_id") or not d.get("title"):
+                raise ValueError(
+                    "new project (project_id=null) requires client_id and title"
+                )
+        status_agent = d.get("status_agent")
+        if status_agent is not None:
+            _check(status_agent, PROJECT_STATUSES, "status_agent")
+        confidence = d.get("confidence")
+        if confidence is not None:
+            _check(confidence, CONFIDENCES, "confidence")
+        return cls(
+            project_id=project_id,
+            status_agent=status_agent,
+            status_evidence=d.get("status_evidence", ""),
+            confidence=confidence,
+            evidence_thread_ids=list(d.get("evidence_thread_ids", [])),
+            blockers=[Blocker.from_dict(b) for b in d.get("blockers", [])],
+            todos=[Todo.from_dict(t) for t in d.get("todos", [])],
+            deadline=d.get("deadline"),
+            deadline_kind=d.get("deadline_kind"),
+            client_id=d.get("client_id"),
+            end_client=d.get("end_client"),
+            title=d.get("title"),
+            assignee=d.get("assignee"),
+            subcontractor=d.get("subcontractor"),
+        )
+
+
+@dataclass
+class DigestUpdate:
+    headline: str
+    detail: str
+    importance: str
+    project_id: str | None = None
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> DigestUpdate:
+        importance = d.get("importance", "med")
+        _check(importance, IMPORTANCES, "importance")
+        return cls(
+            headline=d["headline"],
+            detail=d.get("detail", ""),
+            importance=importance,
+            project_id=d.get("project_id"),
+        )
+
+
+@dataclass
+class Unresolved:
+    thread_id: str
+    why: str
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Unresolved:
+        return cls(thread_id=d["thread_id"], why=d.get("why", ""))
+
+
+@dataclass
+class ModelOutput:
+    generated_at: str | None = None
+    project_updates: list[ProjectUpdate] = field(default_factory=list)
+    digest_updates: list[DigestUpdate] = field(default_factory=list)
+    unresolved: list[Unresolved] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ModelOutput:
+        return cls(
+            generated_at=d.get("generated_at"),
+            project_updates=[
+                ProjectUpdate.from_dict(p) for p in d.get("project_updates", [])
+            ],
+            digest_updates=[
+                DigestUpdate.from_dict(u) for u in d.get("digest_updates", [])
+            ],
+            unresolved=[Unresolved.from_dict(u) for u in d.get("unresolved", [])],
+        )
