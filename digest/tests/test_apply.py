@@ -90,8 +90,9 @@ def test_last_activity_recomputed_from_evidence_not_model():
 
 
 def test_last_activity_never_regresses_to_old_evidence():
-    # Old evidence must not LOWER last_activity. The project was touched this run, so it floors at the
-    # run date (a touched project had activity now) — and never drops back to the stale 2026-01-01.
+    # Old evidence must not LOWER last_activity. The only in-window evidence cited (2026-01-01) is older
+    # than the existing date, so there's no newer activity — it stays at 2026-05-30 (never drops, and per
+    # G1 doesn't jump to run_date on the mere presence of an update).
     out = ModelOutput.from_dict(
         {
             "project_updates": [
@@ -107,8 +108,8 @@ def test_last_activity_never_regresses_to_old_evidence():
         _projects(), out, run_date="2026-06-05", thread_dates={"t-old": "2026-01-01"}
     )
     assert (
-        projects[0].last_activity_date == "2026-06-05"
-    )  # floored at run date, not regressed
+        projects[0].last_activity_date == "2026-05-30"
+    )  # held, not regressed, not reset
 
 
 def test_untouched_project_keeps_its_old_last_activity():

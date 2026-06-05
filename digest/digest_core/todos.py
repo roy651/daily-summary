@@ -236,26 +236,37 @@ def suspected_closures(
     return out
 
 
+def _rendered_todo_key(todo: Todo, client_id: str, end_client: str | None) -> str:
+    """Reconstruct the body of a rendered todo line (sans checkbox + marker), normalized — the exact
+    key a checked-off line round-trips to. Mirrors render.render_todos_md's line body. EXACT match (not
+    substring) so checking 'Send the brochure to Acme' never silently closes a sibling 'Send the brochure'."""
+    target = f" → {todo.target}" if todo.target else ""
+    client = f"{client_id} / {end_client}" if end_client else client_id
+    return _norm_text(f"[{todo.category}] {todo.text}{target}  ({client})")
+
+
 def close_todos_from_feedback(projects: list[Project], done_items: list[str]) -> int:
-    """Remove open todos that Avigail checked off (the rendered line contains the todo text). Returns
-    the count closed. Highest-confidence closure: it's her explicit done-mark."""
-    done = [d.lower() for d in done_items]
+    """Remove open todos Avigail checked off, matching each checked line to a todo by EXACT normalized
+    rendered-line equality (G2). Returns the count closed. Highest-confidence closure: her explicit done-mark."""
+    done = {_norm_text(d) for d in done_items}
     closed = 0
 
-    def _filter(todos: list[Todo]) -> list[Todo]:
+    def _filter(
+        todos: list[Todo], client_id: str, end_client: str | None
+    ) -> list[Todo]:
         nonlocal closed
         kept = []
         for t in todos:
-            if any(t.text.lower() in d for d in done):
+            if _rendered_todo_key(t, client_id, end_client) in done:
                 closed += 1
             else:
                 kept.append(t)
         return kept
 
     for p in projects:
-        p.open_todos = _filter(p.open_todos)
+        p.open_todos = _filter(p.open_todos, p.client_id, p.end_client)
         for task in p.tasks:
-            task.open_todos = _filter(task.open_todos)
+            task.open_todos = _filter(task.open_todos, p.client_id, p.end_client)
     return closed
 
 

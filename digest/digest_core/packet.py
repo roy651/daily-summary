@@ -35,7 +35,11 @@ GLOSSARY = (
     "IMPORTANT — do NOT model a person as a client unless work is genuinely done FOR them: someone who "
     "INVOICES Avigail or whose output FEEDS her deliverables (e.g. an illustrator) is a SUBCONTRACTOR; "
     "someone who COORDINATES/manages on the agency side is an AGENT. Their jobs belong as todos under "
-    "the real client's project (verify_subcontractor / communicate_client), not as a client of their own."
+    "the real client's project (verify_subcontractor / communicate_client), not as a client of their own. "
+    "ACTIVITY CONTRACT: emit a project_update ONLY for projects with genuine activity in this window, and "
+    "cite the responsible thread ids in evidence_thread_ids. Do NOT re-state quiet/unchanged projects — "
+    "they carry forward automatically; their silence is what lets them age to 'suspected dormant'. Activity "
+    "is dated from the cited in-window evidence, never from the fact that you mentioned a project."
 )
 
 

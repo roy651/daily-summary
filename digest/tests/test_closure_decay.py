@@ -66,6 +66,10 @@ def test_model_marks_project_done_drops_from_active():
 
 
 def test_feedback_checkoffs_close_todos():
+    # Honest round-trip: render the editable file, check a line off, parse it back, close it.
+    from digest_core.feedback import parse_todos_md
+    from digest_core.render import render_todos_md
+
     projs = [
         Project(
             project_id="p1",
@@ -78,14 +82,49 @@ def test_feedback_checkoffs_close_todos():
             ],
         )
     ]
-    # The rendered+checked line contains the todo text plus tags/markers.
-    done_items = ["[self] Build the RMX BrandBook from elements  (sprig / rhythmedix)"]
-    closed = close_todos_from_feedback(projs, done_items)
-    assert (
-        closed == 0 or closed == 1
-    )  # substring match: "Build the RMX BrandBook" is in the line
-    assert any(t.text == "Send Kristen the estimate" for t in projs[0].open_todos)
-    assert not any(t.text == "Build the RMX BrandBook" for t in projs[0].open_todos)
+    md = render_todos_md(
+        prioritize(projs, run_date="2026-05-18"), run_date="2026-05-18"
+    )
+    checked = md.replace(
+        "- [ ] [self] Build the RMX BrandBook ",
+        "- [x] [self] Build the RMX BrandBook ",
+    )
+    fb = parse_todos_md(checked, run_date="2026-05-18")
+    closed = close_todos_from_feedback(projs, fb.eod_actuals)
+    assert closed == 1
+    assert [t.text for t in projs[0].open_todos] == ["Send Kristen the estimate"]
+
+
+def test_feedback_closure_is_exact_not_substring():
+    # G2: checking the longer todo must NOT silently close its shorter prefix-sibling.
+    from digest_core.feedback import parse_todos_md
+    from digest_core.render import render_todos_md
+
+    projs = [
+        Project(
+            project_id="p1",
+            client_id="acme",
+            title="t",
+            status="active",
+            open_todos=[
+                _todo("Send the brochure"),
+                _todo("Send the brochure to the printer"),
+            ],
+        )
+    ]
+    md = render_todos_md(
+        prioritize(projs, run_date="2026-05-18"), run_date="2026-05-18"
+    )
+    checked = md.replace(
+        "- [ ] [self] Send the brochure to the printer",
+        "- [x] [self] Send the brochure to the printer",
+    )
+    fb = parse_todos_md(checked, run_date="2026-05-18")
+    closed = close_todos_from_feedback(projs, fb.eod_actuals)
+    assert closed == 1
+    assert [t.text for t in projs[0].open_todos] == [
+        "Send the brochure"
+    ]  # the shorter sibling survived
 
 
 # ── passive decay (surface, never delete) ──
@@ -127,6 +166,66 @@ def test_overdue_todo_on_stale_project_is_suspected_done():
     ]
     s = suspected_closures(projs, run_date="2026-05-18")
     assert any(x.kind == "overdue_todo" and "Ship the booth" in x.title for x in s)
+
+
+def test_new_window_evidence_advances_last_activity():
+    # A project the model touches WITH evidence in this run's window advances to that evidence's date.
+    projs = [
+        Project(
+            project_id="p1",
+            client_id="c",
+            title="t",
+            status="active",
+            last_activity_date="2026-03-01",
+        )
+    ]
+    out = ModelOutput.from_dict(
+        {
+            "project_updates": [
+                {
+                    "project_id": "p1",
+                    "status_agent": "active",
+                    "evidence_thread_ids": ["th1"],
+                }
+            ]
+        }
+    )
+    projects = apply_model_output(
+        projs, out, run_date="2026-05-18", thread_dates={"th1": "2026-05-17"}
+    )
+    assert projects[0].last_activity_date == "2026-05-17"
+
+
+def test_restated_project_without_new_evidence_does_not_reset_clock():
+    # G1: a model re-stating an unchanged project (no evidence in THIS window) must NOT reset the decay
+    # clock to run_date — otherwise dormancy/auto-archive could never fire under a re-stating model.
+    projs = [
+        Project(
+            project_id="p1",
+            client_id="c",
+            title="Old project",
+            status="active",
+            last_activity_date="2026-03-01",
+            evidence_thread_ids=["old-thread"],
+        )
+    ]
+    out = ModelOutput.from_dict(
+        {
+            "project_updates": [
+                {
+                    "project_id": "p1",
+                    "status_agent": "active",
+                    "evidence_thread_ids": ["old-thread"],  # echoed; not in this window
+                }
+            ]
+        }
+    )
+    projects = apply_model_output(
+        projs, out, run_date="2026-05-18", thread_dates={"new-thread": "2026-05-18"}
+    )
+    assert projects[0].last_activity_date == "2026-03-01"  # aged, not reset
+    s = suspected_closures(projects, run_date="2026-05-18")
+    assert any(x.kind == "dormant_project" and x.project_id == "p1" for x in s)
 
 
 def test_overdue_todo_on_fresh_project_is_not_suspected():
@@ -230,11 +329,17 @@ def test_billed_flag_sets_billed_on_and_revival_clears_it():
         ModelOutput.from_dict(
             {
                 "project_updates": [
-                    {"project_id": "p1", "status_agent": "active", "billed": True}
+                    {
+                        "project_id": "p1",
+                        "status_agent": "active",
+                        "billed": True,
+                        "evidence_thread_ids": ["b1"],
+                    }
                 ]
             }
         ),
         run_date="2026-05-01",
+        thread_dates={"b1": "2026-05-01"},
     )
     assert projs[0].billed_on == "2026-05-01"
     # It then archives on silence...
