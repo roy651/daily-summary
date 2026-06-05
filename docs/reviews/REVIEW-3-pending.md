@@ -59,6 +59,26 @@ Avigail drop notes in the feedback mail / review file and have the system route 
 consume half of the learning loop (K2-adjacent): tag provenance so human-confirmed notes outrank
 agent-inferred ones.
 
+## ✅ BUILT (commits e630821, 3efe702, 1b7b602, aaa917f, + status-list): D0/D1/D2 closure+decay
+
+The removal/decay model is now implemented and exercised on the real Feb→May state:
+- **Evidence-based closure** — `ProjectUpdate.closed_todos` + `status: done`; `apply` removes them.
+- **Feedback closure** — `run_digest` consumes Avigail's `out/todos.md` check-offs at the start of a run.
+- **Passive decay** — `suspected_closures` flags dormant projects (silent ≥28d) + overdue/stale todos;
+  overdue ⇒ "suspected done" ONLY if the project is also stale (fresh-overdue stays in the list).
+- **Safety valve** — suspects render in "Suspected done / dormant — confirm to clear"; suspected
+  todos/projects move OUT of the active TODO/status lists (never auto-deleted).
+- **D1 fixed** — overdue no longer inflates to max-urgency (a modest nudge instead).
+- `last_activity_date` now floors at run_date for touched projects so the decay clock works.
+
+**Real before/after (May digest):** Project status 22→13 active; TODO list 65→26 active; 22 items
+surfaced to confirm. 114 tests green.
+
+**Still open (next):** (a) consume a *project*-level dormancy confirmation (today a dormant project is
+surfaced but archiving it still needs a model `status:archived` or hand-edit — a simple `archive:`/
+`done:` feedback directive would close the loop); (b) populate `evidence_thread_ids` so last_activity
+uses precise dates, not the run-date floor; (c) cap rendered suspected list (currently capped at 12).
+
 ## D0 (ROOT) — The system is add-only: no removal / closure / decay model
 
 D1 and D2 are symptoms of one root gap. Every mechanism we built **adds or updates** (projects,
