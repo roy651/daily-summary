@@ -10,8 +10,12 @@ shares the portable `mail-evidence` input layer.
 
 ## Where we are
 
-**Phase 0 — Scaffold (in progress).** Repo skeleton + conventions mirrored from the sibling.
-Nothing reasons yet.
+**Phase 1 — MVP + evaluation harness: complete** (82 tests green; pending external milestone review).
+The whole loop runs end-to-end offline: condition mail → reasoning packet → MODEL PASS (replay/
+session/api seam) → guarded apply → render (project status + 24h updates + prioritized todos) →
+deliver (file default; email built, flag-off) → persist. A golden test reproduces a fixed digest +
+prioritized todos byte-for-byte; the ground-truth backtest scorer is in place. CLI:
+`bootstrap | daily | feedback | review | score | show`. Not yet run against real mail.
 
 ## Key decisions
 

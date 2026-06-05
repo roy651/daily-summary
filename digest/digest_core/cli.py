@@ -190,6 +190,17 @@ def _cmd_review(args, env: Mapping[str, str]) -> int:
     return 0
 
 
+def _cmd_score(args, env: Mapping[str, str]) -> int:
+    from digest_core.evaluation import GroundTruth, score_digest
+
+    digest_md = Path(args.digest).read_text(encoding="utf-8")
+    result = score_digest(digest_md, GroundTruth.load(args.gt))
+    print(f"recall {result.matched}/{result.total} = {result.recall:.2f}")
+    for phrase in result.missed:
+        print(f"  MISSED: {phrase}")
+    return 0
+
+
 def _cmd_show(args, env: Mapping[str, str]) -> int:
     projects, clients, contacts = _load_state(Path(args.state_dir))
     print(
@@ -272,6 +283,13 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--state-dir", default="state")
     r.add_argument("--out-dir", default="out")
     r.set_defaults(func=_cmd_review)
+
+    sc = sub.add_parser(
+        "score", help="score a produced digest against a ground-truth file"
+    )
+    sc.add_argument("--digest", required=True)
+    sc.add_argument("--gt", required=True)
+    sc.set_defaults(func=_cmd_score)
 
     s = sub.add_parser("show", help="print current state (read-only)")
     s.add_argument("--state-dir", default="state")

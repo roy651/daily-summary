@@ -5,7 +5,8 @@ All phases are **test-driven** (failing test first) and end with a **milestone r
 
 ## Current phase
 
-**Phase 0 — Scaffold.** (in progress)
+**Phase 1 — MVP + evaluation harness.** ✅ complete (pending milestone review). Next: Phase 1.5
+(Zoom transcripts), or wire a real bootstrap run against the sibling export.
 
 ## Phase 0 — Scaffold
 
