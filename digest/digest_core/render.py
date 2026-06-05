@@ -35,6 +35,16 @@ def render_digest_md(
     suspected: list | None = None,
 ) -> str:
     ranked = prioritize(projects, run_date=run_date)
+    # Todos suspected done/stale move OUT of the active list into "confirm to clear" — so the main
+    # TODO list shows only genuinely-active work, not months of likely-completed carry-forward.
+    suspected_todo_keys = {
+        (s.project_id, s.title)
+        for s in (suspected or [])
+        if s.kind in ("overdue_todo", "stale_todo")
+    }
+    ranked = [
+        r for r in ranked if (r.project_id, r.todo.text) not in suspected_todo_keys
+    ]
     lines: list[str] = [f"# Daily digest — {run_date_label or run_date}", ""]
 
     # 1. Project status — only genuinely-active work (done/archived drop off; dormant is surfaced below).
