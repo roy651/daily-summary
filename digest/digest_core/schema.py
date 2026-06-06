@@ -110,15 +110,28 @@ class DigestUpdate:
         )
 
 
+# How an unplaced/flagged thread is routed in the digest:
+#   unplaced = business thread the model couldn't attach to a project (needs your eye)
+#   personal = non-business human mail (invitation, RSVP, appointment, family) — always surfaced
+#   lead     = a possible new business inquiry
+#   entity   = a new/ambiguous person-or-role decision the model wants confirmed (e.g. "treating X as a sub")
+UNRESOLVED_KINDS = frozenset({"unplaced", "personal", "lead", "entity"})
+
+
 @dataclass
 class Unresolved:
     thread_id: str
     why: str
+    kind: str = "unplaced"
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Unresolved:
+        kind = d.get("kind", "unplaced")
+        _check(kind, UNRESOLVED_KINDS, "unresolved kind")
         return cls(
-            thread_id=_require(d, "thread_id", "unresolved"), why=d.get("why", "")
+            thread_id=_require(d, "thread_id", "unresolved"),
+            why=d.get("why", ""),
+            kind=kind,
         )
 
 

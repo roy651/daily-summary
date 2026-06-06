@@ -100,10 +100,24 @@ def render_digest_md(
         lines.extend(_ranked_line(r) for r in group)
     lines.append("")
 
-    # 4. Needs your eye — low-confidence / unplaced threads (surface, don't drop)
-    if output.unresolved:
-        lines.append("## Needs your eye")
-        for u in output.unresolved:
+    # 4. Unresolved threads, surfaced (never dropped) and split by kind so personal mail and entity
+    #    questions don't hide among unplaced business threads. 'unplaced' is the catch-all.
+    for kind, title in (
+        ("personal", "Personal"),
+        ("lead", "Possible new leads"),
+        ("entity", "New people / roles — confirm"),
+        ("unplaced", "Needs your eye"),
+    ):
+        group = [
+            u
+            for u in output.unresolved
+            if u.kind == kind
+            or (kind == "unplaced" and u.kind not in ("personal", "lead", "entity"))
+        ]
+        if not group:
+            continue
+        lines.append(f"## {title}")
+        for u in group:
             lines.append(f"- thread `{u.thread_id}`: {u.why}")
         lines.append("")
 
@@ -166,7 +180,24 @@ def render_todos_md(ranked: list[RankedTodo], *, run_date: str) -> str:
                 f"({_client_label(r.client_id, r.end_client)}) <!-- {marker} -->"
             )
         lines.append("")
+    lines.extend(_feedback_template())
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _feedback_template() -> list[str]:
+    """A fill-in-the-blanks feedback block appended to the todo file. The directive lines are live but
+    empty (no-ops until filled); the whole file is regenerated next run, so filled feedback 'clears'
+    after it's read. parse_todos_md ignores the heading/comment and treats empty directives as no-ops."""
+    return [
+        "## ✎ Feedback (optional) — fill any line, save; it's applied next run, then resets",
+        "<!-- check off done items above with [x]. Then, after each tag below, add ids/text:",
+        "     archive = a finished/dormant project · revive = bring one back · suppress = hide a thread",
+        "     note = tell me anything, incl. fixing who someone is (e.g. an entity/role correction) -->",
+        "# archive: ",
+        "# revive: ",
+        "# suppress: ",
+        "# notes: ",
+    ]
 
 
 def render_state_review_md(

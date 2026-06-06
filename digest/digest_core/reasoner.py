@@ -129,6 +129,10 @@ MODEL_OUTPUT_SCHEMA: dict[str, Any] = {
                 "properties": {
                     "thread_id": {"type": "string"},
                     "why": {"type": "string"},
+                    "kind": {
+                        "type": "string",
+                        "enum": ["unplaced", "personal", "lead", "entity"],
+                    },
                 },
                 "required": ["thread_id"],
             },
@@ -166,6 +170,11 @@ _REASONER_SYSTEM = (
     "client's project. SPRIG is an agency; SPRIG-direct work is client_id=sprig, end_client=null.\n"
     "- RECALL-FIRST: never drop a possibly-relevant human thread — surface low-confidence items in "
     "unresolved or as low-importance digest_updates. Losing an important email is the worst failure.\n"
+    "- UNRESOLVED kinds (set 'kind' on each): 'personal' for non-business human mail (invitations, RSVPs, "
+    "appointments, family, courses) — ALWAYS surface these, never drop them; 'lead' for a possible new "
+    "business inquiry; 'entity' when you make a NEW or AMBIGUOUS person/role call you'd want Avigail to "
+    "confirm (e.g. first time treating an address as a subcontractor, or two addresses that may be the "
+    "same person); 'unplaced' (default) for a business thread you couldn't attach to a project.\n"
     "- Allowed enums: status active|on_hold|blocked|done|archived; todo category self|"
     "verify_subcontractor|communicate_client; confidence/importance high|med|low; deadline_kind "
     "hard|soft. Follow the packet's glossary for entity/role specifics."
