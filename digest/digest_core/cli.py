@@ -39,11 +39,18 @@ log = logging.getLogger("digest")
 
 
 def _self_addresses(env: Mapping[str, str]) -> set[str]:
-    return {
-        a.strip().lower()
-        for a in (env.get("IMAP_USER", ""), env.get("DIGEST_EMAIL_TO", ""))
-        if a.strip()
+    """All of Avigail's own addresses — used to recognize our own outbound digest (and her reply) and to
+    mark mail direction. Covers the legacy/single IMAP user, every multi-account IMAP user, the SMTP
+    From (the digest is sent from there), and the digest recipient."""
+    addrs = {
+        env.get("IMAP_USER", ""),
+        env.get("SMTP_USER", ""),
+        env.get("DIGEST_EMAIL_TO", ""),
     }
+    for name in env.get("IMAP_ACCOUNTS", "").split(","):
+        if name.strip():
+            addrs.add(env.get(f"IMAP_{name.strip().upper()}_USER", ""))
+    return {a.strip().lower() for a in addrs if a.strip()}
 
 
 def _today() -> str:

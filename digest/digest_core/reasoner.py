@@ -18,7 +18,7 @@ Api backends so swapping providers is an env change, never a code change.
 from __future__ import annotations
 
 import json
-import os
+import logging
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
@@ -27,6 +27,7 @@ from typing import Any, Protocol
 from digest_core.schema import ModelOutput
 
 ReasoningPacket = dict[str, Any]
+log = logging.getLogger("digest.reasoner")
 
 
 class Reasoner(Protocol):
@@ -279,19 +280,39 @@ class CodeReasoner:
 
     def reason(self, packet: ReasoningPacket) -> ModelOutput:
         _write_packet(self.packet_path, packet)
-        # Start clean so we never consume a stale prior-day output the headless pass didn't overwrite.
-        self.output_path.unlink(missing_ok=True)
-        self._runner(self._prompt())
-        if not self.output_path.exists():
-            raise RuntimeError(
-                f"CodeReasoner: `claude` produced no {self.output_path}. "
-                "Check that claude is logged in and allowed Read,Write."
-            )
-        return _consume_output(self.output_path, self.packet_path, self.run_date)
+        # One reprompt-on-bad-output retry, so a single malformed pass (prose / code fence / wrong path)
+        # doesn't lose the whole day's digest (H4). SessionPending (wrong-day stamp) is NOT retried.
+        last_err = "no output file"
+        for attempt in range(2):
+            self.output_path.unlink(
+                missing_ok=True
+            )  # never consume a stale prior output
+            self._runner(self._prompt(retry=attempt > 0))
+            if not self.output_path.exists():
+                last_err = f"`claude` produced no {self.output_path.name}"
+                continue
+            try:
+                return _consume_output(
+                    self.output_path, self.packet_path, self.run_date
+                )
+            except json.JSONDecodeError as exc:
+                last_err = f"invalid JSON: {exc}"
+            except ValueError as exc:  # schema.py rejected an enum / missing field
+                last_err = f"invalid ModelOutput: {exc}"
+        raise RuntimeError(
+            f"CodeReasoner: `claude` did not produce valid model_output.json after a retry ({last_err}). "
+            "Check that claude is logged in and allowed Read,Write."
+        )
 
-    def _prompt(self) -> str:
+    def _prompt(self, *, retry: bool = False) -> str:
+        retry_hint = (
+            "Your previous attempt did not write a single valid JSON object — write ONLY the JSON, no "
+            "prose, no code fence, no markdown. "
+            if retry
+            else ""
+        )
         return (
-            f"Read {self.packet_path} — the reasoning packet for today's digest. Then write "
+            f"{retry_hint}Read {self.packet_path} — the reasoning packet for today's digest. Then write "
             f"{self.output_path} as a SINGLE JSON object (no prose, no code fence) conforming to the "
             f"ModelOutput schema (project_updates, digest_updates, unresolved, insights), with "
             f'"generated_at": "{self.run_date}".\n\n{_REASONER_SYSTEM}'
@@ -310,9 +331,17 @@ class CodeReasoner:
         ]
         if self.model:
             cmd += ["--model", self.model]
-        # Capture (don't stream) claude's own output so it doesn't flood a cron/terminal log; surface it
-        # only if claude fails non-zero, where its message is the actionable diagnostic.
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout)
+        # Run from the packet's (scratch) dir so claude can't reach/clobber live state and doesn't
+        # auto-load this repo's CLAUDE.md/skills (H3). Capture output; log it (debug) instead of flooding
+        # the cron log; surface it only on non-zero exit, where it's the actionable diagnostic (H4).
+        proc = subprocess.run(
+            cmd,
+            cwd=str(self.packet_path.parent),
+            capture_output=True,
+            text=True,
+            timeout=self.timeout,
+        )
+        log.debug("claude -p stdout: %s", (proc.stdout or "").strip()[:1000])
         if proc.returncode != 0:
             raise RuntimeError(
                 f"`claude -p` failed (exit {proc.returncode}): {(proc.stderr or proc.stdout or '').strip()[:500]}"
@@ -414,7 +443,12 @@ class ApiReasoner:
                 {"role": "user", "content": json.dumps(packet, ensure_ascii=False)},
             ],
         )
-        return json.loads(resp.choices[0].message.content)
+        content = resp.choices[0].message.content
+        if not content:  # a tool-call/refusal/empty completion yields None — fail clearly, don't crash
+            raise RuntimeError(
+                "ApiReasoner(openai): empty response content (refusal or tool-call?) — no JSON to parse"
+            )
+        return json.loads(content)
 
 
 def select_reasoner(
@@ -424,6 +458,8 @@ def select_reasoner(
     run_date: str,
     replay_path: str | Path | None = None,
 ) -> Reasoner:
+    # `session` is the safe built-in default (never auto-shell-out / hit the network unless asked);
+    # the deployed config selects `code` via .env. (H5: note + .env.example say so explicitly.)
     mode = env.get("REASONER", "session").strip().lower()
     work_dir = Path(work_dir)
     packet_path = work_dir / "packet.json"
@@ -432,19 +468,34 @@ def select_reasoner(
         path = replay_path or env.get("REPLAY_OUTPUT") or output_path
         return ReplayReasoner(path)
     if mode == "code":
+        # H3: hand the headless pass a dedicated scratch dir (packet + output ONLY). claude runs with
+        # cwd + --add-dir scoped to it, so it can't reach live state (projects.json, watermarks) and
+        # doesn't auto-load this repo's CLAUDE.md/skills.
+        scratch = work_dir / ".reasoner"
         return CodeReasoner(
-            packet_path=packet_path,
-            output_path=output_path,
+            packet_path=scratch / "packet.json",
+            output_path=scratch / "model_output.json",
             run_date=run_date,
             claude_bin=env.get("CLAUDE_BIN", "claude"),
             model=env.get("CLAUDE_MODEL") or None,
         )
     if mode == "api":
+        provider = env.get("LLM_PROVIDER", "anthropic").strip().lower()
+        # H1: only fall back to ANTHROPIC_API_KEY for the Anthropic provider — NEVER hand it to a
+        # third-party (OpenRouter/etc.) endpoint. openai-compatible requires its own LLM_API_KEY.
+        api_key = env.get("LLM_API_KEY")
+        if not api_key and provider == "anthropic":
+            api_key = env.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                f"REASONER=api provider={provider!r} requires LLM_API_KEY"
+                + (" or ANTHROPIC_API_KEY" if provider == "anthropic" else "")
+            )
         return ApiReasoner(
             run_date=run_date,
-            provider=env.get("LLM_PROVIDER", "anthropic"),
+            provider=provider,
             model=env.get("LLM_MODEL") or None,
-            api_key=env.get("LLM_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"),
+            api_key=api_key,
             base_url=env.get("LLM_BASE_URL") or None,
         )
     return SessionReasoner(

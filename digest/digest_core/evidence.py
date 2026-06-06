@@ -81,12 +81,15 @@ def unify(
     digest_subject_tag: str = "digest:",
 ) -> list[Thread]:
     """Return cleaned, chronologically-sorted threads; threads emptied by filtering are dropped."""
+    self_set = {a.strip().lower() for a in self_addresses if a and a.strip()}
     cleaned: list[Thread] = []
     for t in threads:
         kept = [
             r
             for r in t.records
-            if not is_self_generated(r, digest_subject_tag=digest_subject_tag)
+            if not is_self_generated(
+                r, digest_subject_tag=digest_subject_tag, self_addresses=self_set
+            )
         ]
         if not kept:
             continue

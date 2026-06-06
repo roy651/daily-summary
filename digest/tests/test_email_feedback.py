@@ -102,3 +102,17 @@ def test_outbound_digest_is_self_generated():
 def test_real_client_mail_is_not_self_generated():
     r = types.SimpleNamespace(source="email", subject="Re: RhythMedix logo")
     assert is_self_generated(r) is False
+
+
+def test_self_generated_requires_self_sender_when_addresses_given():
+    # H6: with self_addresses, only mail FROM Avigail counts as self-generated — a client thread that
+    # happens to be subject-named 'digest:' must NOT be dropped (recall-is-the-gate).
+    selfset = {"avigail@ula.co.il", "avigail.studio@gmail.com"}
+    ours = types.SimpleNamespace(
+        source="email", subject="digest: 2026-06-06", from_="avigail.studio@gmail.com"
+    )
+    client = types.SimpleNamespace(
+        source="email", subject="Re: digest: pricing question", from_="client@acme.com"
+    )
+    assert is_self_generated(ours, self_addresses=selfset) is True
+    assert is_self_generated(client, self_addresses=selfset) is False

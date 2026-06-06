@@ -129,6 +129,44 @@ aren't pushed by default; "Nothing pushed" in the note confirms it). The diff ra
 (`review-3..HEAD`, the `review-4` tag) therefore don't resolve for anyone else. `git push --tags` for
 `review-3` and `review-4` would make all four ranges reproducible.
 
+## Reconciliation — dispositions (owner-side, 2026-06-06)
+
+- **H1 (key leak) — FIXED.** `select_reasoner` now falls back to `ANTHROPIC_API_KEY` ONLY for
+  `provider=anthropic`; an openai-compatible provider requires its own `LLM_API_KEY` and fails loudly if
+  missing, so the Anthropic key is never handed to a third-party endpoint. Reads the injected `env`, not
+  `os.environ`. Test: `test_select_reasoner_never_leaks_anthropic_key_to_third_party`.
+- **H2 (provenance) — SUBSTANTIALLY FIXED (commit `8b3a85c`, before the reviewer saw HEAD).** Feedback
+  notes are tagged `[AVIGAIL-CONFIRMED]` in the packet (`general_notes(mark_confirmed=True)`) and the
+  reasoner is instructed to follow them over its own inference AND over older contradicting notes. This
+  delivers the reviewer's primary fix ("surface provenance to the model"). **Still open:** the *mechanical*
+  half — a confirmed correction overriding the sticky contact role / creating an alias (G4 + R-E). Scheduled
+  as the `# alias:` / role-override directive; pairs with C2 per the steer.
+- **H3 (claude -p sandbox) — FIXED.** `CodeReasoner` now uses a dedicated scratch dir (`state/.reasoner/`,
+  packet + output only); `claude` runs with `cwd` + `--add-dir` scoped to it, so it can't reach live state
+  (projects.json, watermarks) and doesn't auto-load this repo's `CLAUDE.md`/skills. Tools stay
+  `Read,Write`. (`--dangerously-skip-permissions` retained, but blast radius is now the scratch dir; a
+  settings-scoped permission mode is a later refinement.)
+- **H4 (JSON robustness) — FIXED.** `CodeReasoner` does one reprompt-on-invalid/missing-JSON retry and
+  logs claude's stdout (debug) instead of discarding it; `ApiReasoner(openai)` guards empty/None content
+  with a clear error. *Deliberately NOT done:* reshaping `MODEL_OUTPUT_SCHEMA` to OpenAI strict-mode
+  (every key required + `additionalProperties:false`) — we keep it permissive and rely on `schema.py` as
+  the authoritative gate; the retry + None-guard cover the failure modes.
+- **H5 (default mismatch) — FIXED (docs).** Clarified that `session` is the safe built-in default and
+  `code` is selected by this deployment's `.env` (`.env.example` + a `select_reasoner` comment now agree).
+- **H6 (self-generated subject-only) — FIXED.** `is_self_generated` now also requires the sender to be
+  one of Avigail's addresses when `self_addresses` is supplied; `_self_addresses` was broadened to all of
+  them (per-account IMAP users + `SMTP_USER` + `DIGEST_EMAIL_TO`) so the outbound digest is still
+  recognized while a client thread named `digest:` is not dropped. `unify` passes them through. Tests in
+  `test_email_feedback.py`. *Open:* persisting the sent `Message-ID` for precise `In-Reply-To` threading
+  (vs subject heuristic) — noted for a later pass.
+- **Process / tags.** `review-3` and `review-4` tags exist locally; pushing remains the owner's gate
+  (will `git push --tags` on request).
+- **C-series.** C2 (billing-direction) still the highest-leverage unbuilt fix; C3 partially covered by
+  `kind:entity` (a deterministic new-entity diff remains the more reliable option). Both carried forward.
+
+**Net:** H1/H3/H4/H5/H6 fixed (154 tests green); H2 core fixed, its mechanical-override half scheduled.
+Recommend doing the H2 alias/role-override + C2 before the next unattended-`code` milestone.
+
 ## Sign-off
 
 External review 4 complete (static). **G1/G2 + leak fixes accepted; the backend/multi-account/feedback

@@ -156,8 +156,35 @@ def test_select_reasoner_routes_by_env(tmp_path):
             "REASONER": "api",
             "LLM_PROVIDER": "openai",
             "LLM_BASE_URL": "https://openrouter.ai/api/v1",
+            "LLM_API_KEY": "sk-openrouter",
         },
         work_dir=tmp_path,
         run_date=RUN,
     )
     assert isinstance(api, ApiReasoner) and api.provider == "openai"
+    assert api.api_key == "sk-openrouter"
+
+
+def test_select_reasoner_never_leaks_anthropic_key_to_third_party(tmp_path):
+    # H1: with an openai-compatible provider and no LLM_API_KEY, the Anthropic key must NOT be used —
+    # it would be transmitted to the third-party endpoint. Fail loudly instead.
+    import pytest
+
+    with pytest.raises(RuntimeError, match="requires LLM_API_KEY"):
+        select_reasoner(
+            {
+                "REASONER": "api",
+                "LLM_PROVIDER": "openai",
+                "LLM_BASE_URL": "https://openrouter.ai/api/v1",
+                "ANTHROPIC_API_KEY": "sk-ant-secret",
+            },
+            work_dir=tmp_path,
+            run_date=RUN,
+        )
+    # anthropic provider, however, DOES fall back to ANTHROPIC_API_KEY
+    r = select_reasoner(
+        {"REASONER": "api", "ANTHROPIC_API_KEY": "sk-ant"},
+        work_dir=tmp_path,
+        run_date=RUN,
+    )
+    assert r.provider == "anthropic" and r.api_key == "sk-ant"

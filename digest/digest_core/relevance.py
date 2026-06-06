@@ -27,16 +27,26 @@ class KeepAllHumanJudge:
 
 
 def is_self_generated(
-    record: EvidenceRecord, *, digest_subject_tag: str = "digest:"
+    record: EvidenceRecord,
+    *,
+    digest_subject_tag: str = "digest:",
+    self_addresses: set[str] | None = None,
 ) -> bool:
     """True iff this record is one of our own delivered digests OR Avigail's reply to one (both
     recognized by the subject tag). The digest lands back in the inbox when delivered by email, and
     her reply is the feedback channel — neither must be read as project evidence by the reasoner.
-    Stripping a leading Re:/Fwd: is what catches the reply (``Re: digest: …``)."""
+    Stripping a leading Re:/Fwd: is what catches the reply (``Re: digest: …``). When ``self_addresses``
+    is given we ALSO require the sender to be one of Avigail's own addresses (H6), so a real client
+    thread that merely happens to be subject-named 'digest:' isn't wrongly dropped (recall-is-the-gate)."""
     if record.source != "email" or not record.subject:
         return False
     subj = _RE_FWD_PREFIX.sub("", record.subject.strip().lower())
-    return subj.startswith(digest_subject_tag.strip().lower())
+    if not subj.startswith(digest_subject_tag.strip().lower()):
+        return False
+    if self_addresses:
+        frm = (record.from_ or "").lower()
+        return any(a in frm for a in self_addresses)
+    return True
 
 
 # Conservative, STRUCTURAL marketing/bulk signals only (N2). Deliberately NOT keyed off language or
