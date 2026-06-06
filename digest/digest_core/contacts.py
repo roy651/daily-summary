@@ -35,10 +35,13 @@ def _norm_email(raw: str) -> str:
 @dataclass
 class ContactEntry:
     role: str
-    source: str  # "bootstrap" | "auto" | "manual"
+    source: str  # "bootstrap" | "auto" | "model" | "billing" | "feedback" | "manual"
     reason: str = ""
     added: str | None = (
         None  # ISO date when known; None keeps writes deterministic without a clock
+    )
+    alias_of: str | None = (
+        None  # set when this address is another address of a canonical contact (entity merge)
     )
 
 
@@ -104,6 +107,25 @@ class DigestContactStore:
         ):
             return  # don't downgrade a stronger-sourced role
         self._contacts[key] = ContactEntry(role=role, source=source, reason=reason)
+
+    def merge(
+        self, emails: list[str], *, role: str | None, source: str, reason: str = ""
+    ) -> None:
+        """Physically link addresses that are ONE person/entity: the first becomes canonical, the rest
+        point at it via ``alias_of`` (so the review surface shows one person, not several). Sets the
+        shared role too (precedence-guarded). Used by merge_contacts corrections (the Idan case)."""
+        keys = [_norm_email(e) for e in emails if _norm_email(e)]
+        if not keys:
+            return
+        canonical = keys[0]
+        for key in keys:
+            if role:
+                self.set_role(key, role=role, source=source, reason=reason)
+            entry = self._contacts.get(key)
+            if entry is None:
+                entry = ContactEntry(role=role or "other", source=source, reason=reason)
+                self._contacts[key] = entry
+            entry.alias_of = None if key == canonical else canonical
 
     def entry(self, email: str) -> ContactEntry | None:
         return self._contacts.get(_norm_email(email))

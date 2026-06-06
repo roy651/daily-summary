@@ -61,6 +61,21 @@ def test_contacts_set_role_forces_but_human_outranks_model():
     assert c.role_of("idan@rockdesign.co.il") == "client"
 
 
+def test_merge_links_aliases_to_canonical_with_shared_role():
+    c = DigestContactStore()
+    c.add("idandamti@ula.co.il", role="other", source="auto")
+    c.merge(
+        ["idandamti@ula.co.il", "idan@rockdesign.co.il"],
+        role="subcontractor",
+        source="model",
+        reason="same person",
+    )
+    assert c.role_of("idandamti@ula.co.il") == "subcontractor"
+    assert c.role_of("idan@rockdesign.co.il") == "subcontractor"
+    assert c.entry("idandamti@ula.co.il").alias_of is None  # canonical
+    assert c.entry("idan@rockdesign.co.il").alias_of == "idandamti@ula.co.il"
+
+
 def test_apply_corrections_retract_and_merge():
     k = _knowledge(["Rock Design is distinct from Idan Damti"])
     c = DigestContactStore()

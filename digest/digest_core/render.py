@@ -251,18 +251,44 @@ def render_state_review_md(
     lines.append("")
 
     # Contacts & roles — the entity map. Grouped by role so a mis-classified sub/agent/client is easy
-    # to spot; fix with `# alias: a@x, b@y = subcontractor` or by hand-editing state/contacts.json.
+    # to spot; fix with `# alias: a@x, b@y = subcontractor` or `# forget:` / a note in your feedback.
     items = contacts.items() if contacts is not None else []
     lines.append("## Contacts & roles")
     if not items:
         lines.append("_None._")
     else:
+        # Fold aliased addresses under their canonical contact, so one person isn't shown as several.
+        aliases_of: dict[str, list[str]] = {}
+        for email, entry in items:
+            if entry.alias_of:
+                aliases_of.setdefault(entry.alias_of, []).append(email)
         by_role: dict[str, list[str]] = {}
         for email, entry in items:
-            line = f"- {email}" + (f" — _{entry.reason}_" if entry.reason else "")
+            if entry.alias_of:
+                continue  # listed under its canonical
+            aka = aliases_of.get(email)
+            aka_str = f" (aka {', '.join(aka)})" if aka else ""
+            reason = _humanize_reason(entry.reason)
+            line = f"- {email}{aka_str}" + (f" — _{reason}_" if reason else "")
             by_role.setdefault(entry.role, []).append(line)
         for role in sorted(by_role):
             lines.append(f"### {role}")
             lines.extend(by_role[role])
     lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+# Plain-English provenance for the audit surface (the stored `reason` strings are terse/internal).
+_REASON_HUMAN = {
+    "communicate_client target": "someone you communicate with on a project",
+    "verify_subcontractor target": "a subcontractor whose work you verify",
+    "project subcontractor": "subcontractor on a project",
+    "task subcontractor": "subcontractor on a task",
+    "invoices ULA": "invoices you (billing signal)",
+    "invoiced by ULA": "you invoice them (billing signal)",
+    "merged: same person/entity": "merged — same person",
+}
+
+
+def _humanize_reason(reason: str) -> str:
+    return _REASON_HUMAN.get(reason, reason)

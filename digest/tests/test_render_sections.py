@@ -67,6 +67,24 @@ def test_state_review_lists_contacts_by_role():
     assert "### agent" in md and "jen@sprigconsulting.com" in md
 
 
+def test_state_review_folds_aliased_contacts_into_one_person():
+    from digest_core.contacts import DigestContactStore
+    from digest_core.render import render_state_review_md
+
+    c = DigestContactStore()
+    c.merge(
+        ["idandamti@ula.co.il", "idan@rockdesign.co.il"],
+        role="subcontractor",
+        source="model",
+        reason="same person",
+    )
+    md = render_state_review_md([], [], c)
+    assert "idandamti@ula.co.il (aka idan@rockdesign.co.il)" in md
+    assert (
+        md.count("idan@rockdesign.co.il") == 1
+    )  # alias shown only in the (aka …), not its own line
+
+
 def test_unresolved_kind_defaults_and_validates():
     assert (
         ModelOutput.from_dict({"unresolved": [{"thread_id": "t"}]}).unresolved[0].kind

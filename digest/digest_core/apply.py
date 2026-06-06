@@ -227,11 +227,9 @@ def apply_corrections(
             )
         elif c.kind == "merge_contacts":
             emails = [e for e in c.emails if _looks_like_email(e)]
-            if c.role:
-                for e in emails:
-                    contacts.set_role(
-                        e, role=c.role, source=source, reason="entity correction"
-                    )
+            contacts.merge(
+                emails, role=c.role, source=source, reason="merged: same person/entity"
+            )
             note = c.note or (
                 f"{', '.join(emails)} are the same entity." if emails else ""
             )
