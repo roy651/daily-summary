@@ -64,15 +64,39 @@ def test_esp_notification_has_no_direct_counterparty():
     assert billing_counterparty(t, SELF) is None
 
 
-def test_apply_billing_signals_sets_role_over_model_guess():
+def test_reply_to_an_invoice_is_not_a_counterparty():
+    # Katie's "Re: May Invoices" acknowledgement must NOT be read as an invoice she issued.
+    t = _thread(_rec("katiea123@gmail.com", ["avigail@ula.co.il"], "Re: May Invoices"))
+    assert billing_counterparty(t, SELF) is None
+
+
+def test_outbound_fills_unknown_role_with_client():
     c = DigestContactStore()
-    c.add("jen@sprigconsulting.com", role="other", source="model")
+    c.add("new@client.com", role="other", source="auto")
+    k = KnowledgeStore()
+    t = _thread(_rec("avigail@ula.co.il", ["new@client.com"], "May Invoice"))
+    apply_billing_signals([t], c, k, SELF, run_date="2026-06-06")
+    assert c.role_of("new@client.com") == "client"
+    assert any("invoiced by ULA" in n for n in k.general_notes())
+
+
+def test_outbound_does_not_downgrade_a_known_agent():
+    # Avigail invoicing a SPRIG agent (Jen/Katie) must NOT turn the agent into a "client".
+    c = DigestContactStore()
+    c.add("jen@sprigconsulting.com", role="agent", source="model")
     k = KnowledgeStore()
     t = _thread(_rec("avigail@ula.co.il", ["jen@sprigconsulting.com"], "May Invoice"))
-    notes = apply_billing_signals([t], c, k, SELF, run_date="2026-06-06")
-    assert c.role_of("jen@sprigconsulting.com") == "client"
-    assert any("invoiced by ULA" in n for n in k.general_notes())
-    assert notes
+    apply_billing_signals([t], c, k, SELF, run_date="2026-06-06")
+    assert c.role_of("jen@sprigconsulting.com") == "agent"  # unchanged
+
+
+def test_inbound_invoice_overrides_model_guess_with_sub():
+    c = DigestContactStore()
+    c.add("lee@illustrate.com", role="other", source="model")
+    k = KnowledgeStore()
+    t = _thread(_rec("lee@illustrate.com", ["avigail@ula.co.il"], "Invoice 12"))
+    apply_billing_signals([t], c, k, SELF, run_date="2026-06-06")
+    assert c.role_of("lee@illustrate.com") == "subcontractor"
 
 
 def test_billing_mail_is_never_denoised():

@@ -65,8 +65,12 @@ def billing_counterparty(
     for r in thread.records:
         if not looks_like_billing(r):
             continue
+        # Skip replies/forwards: a "Re: … Invoices" acknowledgement is NOT an invoice the replier issued
+        # (this is what mis-tagged Katie's reply as a sub). Only the original invoice carries direction.
+        if (r.subject or "").strip().lower().startswith(("re:", "fwd:", "fw:")):
+            continue
         frm = _bare(r.from_)
-        if _is_self(r.from_):  # outbound invoice -> recipient is a client
+        if _is_self(r.from_):  # outbound invoice -> recipient is a client-side payer
             for to in r.to or []:
                 cp = _bare(to)
                 if cp and not _is_self(to):
@@ -91,11 +95,21 @@ def apply_billing_signals(
         if not cp:
             continue
         email, role = cp
-        contacts.set_role(
-            email, role=role, source="billing", reason="billing-direction signal"
-        )
+        if role == "subcontractor":
+            # Inbound invoice = strong: they bill ULA -> a vendor/sub. Override a model/auto guess.
+            contacts.set_role(
+                email, role="subcontractor", source="billing", reason="invoices ULA"
+            )
+        else:
+            # Outbound invoice = the recipient is a PAYER, but that's a direct client OR an agency agent
+            # (e.g. SPRIG's Jen/Katie). So only FILL an unknown role — never downgrade a known agent to
+            # client. The knowledge note still records the billing relationship.
+            if contacts.role_of(email) in (None, "other"):
+                contacts.set_role(
+                    email, role="client", source="billing", reason="invoiced by ULA"
+                )
         verb = "is invoiced by ULA" if role == "client" else "invoices ULA"
-        note = f"Billing direction: {email} {verb} -> {role}."
+        note = f"Billing direction: {email} {verb}."
         knowledge.add_general(note, date=run_date, source="billing")
         notes.append(note)
     return notes
