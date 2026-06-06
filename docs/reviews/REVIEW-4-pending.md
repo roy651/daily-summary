@@ -108,6 +108,26 @@ ea5a226 Reasoner backends + multi-account live pull
   `kind: entity` → "New people & roles — confirm" section (not a deterministic new-entity diff).
 - **C4** (consume feedback into state/knowledge) — **substantially built** (file + email, notes→knowledge).
 
+## Live-run findings (owner-found in the first file-delivery run; FIXED — commit 8b3a85c)
+
+The first real `DELIVERY=file daily` run ignored both feedback items. Root causes + fixes:
+- **L1 — `# suppress:` was parsed but never applied.** `feedback.suppressed_threads` was populated and
+  dropped on the floor; nothing filtered the thread, so a flagged-off spam lead kept surfacing. *Fix:*
+  `run_digest` now persists a `state/suppressed.json` set, unions new suppressions, and filters those
+  thread-ids out of `cleaned` before the packet — so suppressed threads never reach the reasoner, this
+  run or later. Test: `test_suppressed_thread_is_filtered_and_persisted`.
+- **L2 — free-text corrections were silently dropped.** `parse_todos_md` only captured a note from a
+  line starting exactly with `# notes:`; any other prose (her actual sentence) vanished with no error.
+  *Fix:* once past the `## ✎ Feedback` heading, plain prose is captured as a note (help `<!-- -->`
+  comment skipped; `# note:` singular accepted). Tests in `test_feedback_parse.py`.
+- **L3 — feedback notes had no authority over the model's own guesses.** Knowledge entered the packet
+  as a flat list; the model even re-asserted the contradicted belief as a fresh agent insight. *Fix:*
+  feedback-sourced notes are tagged `[AVIGAIL-CONFIRMED]` in the packet and the reasoner is instructed
+  to follow them over its inference and over older contradicting notes (`knowledge.general_notes(mark_confirmed=True)`).
+  **Still open:** the stale contradicting *agent* note isn't removed — it's only overridden by authority
+  marking; and entity dedupe is still advisory (see R-E). A feedback directive that supersedes/removes a
+  specific knowledge note is a candidate next step.
+
 ## Findings
 
 - [ ] <reviewer fills in> — <severity> — <resolution / commit>
