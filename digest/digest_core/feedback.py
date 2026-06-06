@@ -82,19 +82,41 @@ def _strip_quoted(body: str) -> str:
 def parse_todos_md(text: str, *, run_date: str) -> FeedbackRecord:
     fb = FeedbackRecord(run_date=run_date)
     notes: list[str] = []
+    in_feedback = (
+        False  # once past the "## ✎ Feedback" heading, plain prose is treated as a note
+    )
+    in_comment = False  # skip <!-- ... --> help blocks entirely
     for line in text.splitlines():
+        s = line.strip()
+        if in_comment:
+            if "-->" in s:
+                in_comment = False
+            continue
+        if s.startswith("<!--"):
+            if "-->" not in s:
+                in_comment = True
+            continue
+        low = s.lower()
+        if low.startswith("#") and "feedback" in low:
+            in_feedback = True
+            continue
         if m := _CHECKED.match(line):
             fb.eod_actuals.append(_clean(m.group(1)))
         elif m := _UNCHECKED.match(line):
             fb.revised_todos.append(_clean(m.group(1)))
-        elif line.lower().startswith("# suppress:"):
-            fb.suppressed_threads.extend(_thread_ids(line.split(":", 1)[1]))
-        elif line.lower().startswith("# archive:"):
-            fb.archived_projects.extend(_thread_ids(line.split(":", 1)[1]))
-        elif line.lower().startswith("# revive:"):
-            fb.revived_projects.extend(_thread_ids(line.split(":", 1)[1]))
-        elif line.lower().startswith("# notes:"):
-            notes.append(line.split(":", 1)[1].strip())
+        elif low.startswith("# suppress:"):
+            fb.suppressed_threads.extend(_thread_ids(s.split(":", 1)[1]))
+        elif low.startswith("# archive:"):
+            fb.archived_projects.extend(_thread_ids(s.split(":", 1)[1]))
+        elif low.startswith("# revive:"):
+            fb.revived_projects.extend(_thread_ids(s.split(":", 1)[1]))
+        elif low.startswith(("# notes:", "# note:")):
+            if note := s.split(":", 1)[1].strip():
+                notes.append(note)
+        elif in_feedback and s and not s.startswith("#"):
+            # forgiving capture: free text she typed under the Feedback section becomes a note, so a
+            # correction never silently vanishes just because it lacked the exact `# notes:` prefix.
+            notes.append(s)
     fb.freeform_notes = " ".join(notes)
     return fb
 

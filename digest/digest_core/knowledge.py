@@ -33,8 +33,17 @@ class KnowledgeStore:
                 Observation(date=date, source=source, note=note.strip())
             )
 
-    def general_notes(self) -> list[str]:
-        return [o.note for o in self.general]
+    def general_notes(self, *, mark_confirmed: bool = False) -> list[str]:
+        """Notes for the reasoning packet. With ``mark_confirmed``, feedback-sourced notes (Avigail's
+        own corrections) are tagged so the reasoner treats them as authoritative over its own guesses
+        and over older contradicting notes."""
+        out: list[str] = []
+        for o in self.general:
+            if mark_confirmed and o.source == "feedback":
+                out.append(f"[AVIGAIL-CONFIRMED] {o.note}")
+            else:
+                out.append(o.note)
+        return out
 
     def save(self, path: str | Path) -> None:
         p = Path(path)

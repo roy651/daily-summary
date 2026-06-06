@@ -7,6 +7,7 @@ pull + watermark around it; the watermark is committed only after delivery succe
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -81,6 +82,14 @@ def run_digest(
 ) -> DigestResult:
     knowledge = knowledge if knowledge is not None else KnowledgeStore()
 
+    # Threads Avigail has flagged off (persisted): never surface them again, this run or later.
+    suppressed_path = Path(state_dir) / "suppressed.json"
+    suppressed: set[str] = (
+        set(json.loads(suppressed_path.read_text(encoding="utf-8")))
+        if suppressed_path.exists()
+        else set()
+    )
+
     # CLOSE first (the "remove" half): consume Avigail's check-offs from the previous run's todos file
     # (or email reply) and clear those todos before composing today's digest. Highest-confidence closure.
     closed_from_feedback = 0
@@ -108,10 +117,14 @@ def run_digest(
             knowledge.add_general(
                 feedback.freeform_notes.strip(), date=run_date, source="feedback"
             )
+        suppressed.update(feedback.suppressed_threads)
 
     cleaned = unify(threads, self_addresses=self_addresses)
     # N2: demote clear bulk/marketing so the model isn't buried in noise — but surface what we dropped.
     cleaned, filtered = partition_marketing(cleaned)
+    # Drop suppressed threads entirely — Avigail flagged them off, so the reasoner never sees them.
+    if suppressed:
+        cleaned = [t for t in cleaned if t.thread_id not in suppressed]
     thread_dates = thread_max_dates(cleaned)
 
     packet = build_reasoning_packet(
@@ -123,7 +136,7 @@ def run_digest(
         contacts=contacts,
         threads=cleaned,
         self_addresses=self_addresses,
-        knowledge_general=knowledge.general_notes(),
+        knowledge_general=knowledge.general_notes(mark_confirmed=True),
     )
     output = reasoner.reason(packet)  # may raise SessionPending (caught by the CLI)
     projects = apply_model_output(
@@ -163,6 +176,11 @@ def run_digest(
         write_clients(clients, state_dir / "clients.json")
         contacts.save(state_dir / "contacts.json")
         knowledge.save(state_dir / "knowledge.json")
+        if suppressed:
+            suppressed_path.write_text(
+                json.dumps(sorted(suppressed), indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
 
     return DigestResult(
         run_date=run_date,
