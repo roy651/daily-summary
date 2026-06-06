@@ -135,12 +135,18 @@ aren't pushed by default; "Nothing pushed" in the note confirms it). The diff ra
   `provider=anthropic`; an openai-compatible provider requires its own `LLM_API_KEY` and fails loudly if
   missing, so the Anthropic key is never handed to a third-party endpoint. Reads the injected `env`, not
   `os.environ`. Test: `test_select_reasoner_never_leaks_anthropic_key_to_third_party`.
-- **H2 (provenance) — SUBSTANTIALLY FIXED (commit `8b3a85c`, before the reviewer saw HEAD).** Feedback
-  notes are tagged `[AVIGAIL-CONFIRMED]` in the packet (`general_notes(mark_confirmed=True)`) and the
-  reasoner is instructed to follow them over its own inference AND over older contradicting notes. This
-  delivers the reviewer's primary fix ("surface provenance to the model"). **Still open:** the *mechanical*
-  half — a confirmed correction overriding the sticky contact role / creating an alias (G4 + R-E). Scheduled
-  as the `# alias:` / role-override directive; pairs with C2 per the steer.
+- **H2 (provenance) — FIXED (`8b3a85c` + `b48e8be`).** Two parts: (1) feedback notes are tagged
+  `[AVIGAIL-CONFIRMED]` in the packet and the reasoner is told to follow them over its own inference and
+  older notes (the "surface provenance" fix). (2) The *mechanical* half — a full **correction mechanism**:
+  `knowledge.supersede` (retract a false note, optionally replace) + `contacts.set_role` (force a role;
+  human outranks model) applied via `apply_corrections`, driven by BOTH Avigail's feedback
+  (`# forget:` / `# alias:` in the todos file, `forget:` / `alias:` in an email reply) AND the reasoner's
+  own `corrections` channel in `ModelOutput`. The reasoner is now instructed to RECONCILE — retract the
+  stale note + merge the aliased contacts — rather than append a contradicting note (the Idan/Rock-Design
+  case). This also closes **R-E** and the **G4** sticky-role cluster (a confirmed correction overrides the
+  sticky role). Tests: `test_corrections.py`. **Remaining (smaller):** the merge sets the same role on all
+  aliased addresses + records the alias as knowledge; it does not physically collapse the rows into one
+  canonical contact (cosmetic). Pairs with **C2** as the reviewer noted.
 - **H3 (claude -p sandbox) — FIXED.** `CodeReasoner` now uses a dedicated scratch dir (`state/.reasoner/`,
   packet + output only); `claude` runs with `cwd` + `--add-dir` scoped to it, so it can't reach live state
   (projects.json, watermarks) and doesn't auto-load this repo's `CLAUDE.md`/skills. Tools stay

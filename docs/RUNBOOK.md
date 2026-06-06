@@ -64,11 +64,19 @@ uv run python -m digest_core.cli daily
 uv run python -m digest_core.cli feedback
 ```
 
-**How Avigail corrects things** (e.g. "Rock Design is just Idan, my web dev — not a separate vendor"):
-reply to the digest email (or edit `out/todos.md` on the file backend). Lines like `done: …`,
-`archive: <project-id>`, `suppress: <thread-id>` are applied as directives; any other prose becomes a
-**knowledge note** the reasoner reads next run and trusts over its own guess. Her reply is recognised
-by the `digest:` subject tag and is never fed back in as project evidence.
+**How Avigail corrects things** — reply to the digest email (or edit `out/todos.md` on the file
+backend). Directives (`#` prefix in the file, bare in an email reply):
+- `done: …` close a todo · `archive: <project-id>` / `revive: <id>` · `suppress: <thread-id>` hide a thread
+- `forget: <text>` **delete a wrong fact** from knowledge (paste a bit of its text)
+- `alias: a@x.com, b@y.com = subcontractor` **declare addresses are one person** + set their role
+- any other prose becomes a **knowledge note**, tagged authoritative so the reasoner trusts it over its
+  own guess.
+
+Corrections are applied by both Avigail *and the reasoner itself*: when a confirmed note or clear
+evidence contradicts an existing fact/role, the model emits a `corrections` entry to **retract** the
+stale knowledge and **merge** the mis-identified contacts — so false facts don't linger (e.g. the
+Rock-Design = Idan case). Her reply is recognised by the `digest:` subject tag (from her address) and is
+never fed back in as project evidence.
 
 First-ever live run: seed the watermark so it doesn't cold-start the whole window
 (`FetchConfig` already bounds a cold start to 35 days / 500 msgs):
