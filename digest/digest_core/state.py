@@ -41,6 +41,21 @@ BLOCKER_KINDS = frozenset(
 )
 
 
+# Authority of a fact's source, low→high. Shared by the contact store and the knowledge store: a
+# weaker source may neither downgrade a role nor remove/replace a note written by a stronger one —
+# human (feedback/manual/bootstrap) > billing-direction > model/auto/agent inference. This keeps an
+# Avigail-confirmed fact from being clobbered by a later model pass (the inverse of the H2 guarantee).
+SOURCE_RANK = {
+    "auto": 0,
+    "agent": 0,
+    "model": 0,
+    "billing": 1,
+    "bootstrap": 2,
+    "manual": 2,
+    "feedback": 2,
+}
+
+
 def _check(value: str, allowed: frozenset[str], field_name: str) -> None:
     if value not in allowed:
         raise ValueError(

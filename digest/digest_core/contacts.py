@@ -13,17 +13,9 @@ from dataclasses import asdict, dataclass
 from email.utils import parseaddr
 from pathlib import Path
 
+from digest_core.state import SOURCE_RANK as _SOURCE_RANK
+
 CONTACT_ROLES = frozenset({"client", "agent", "subcontractor", "end_client", "other"})
-# Authority of a role's source, low→high. A correction may not DOWNGRADE to a weaker source:
-# human (feedback/manual/bootstrap) > billing-direction > model/auto inference.
-_SOURCE_RANK = {
-    "auto": 0,
-    "model": 0,
-    "billing": 1,
-    "bootstrap": 2,
-    "manual": 2,
-    "feedback": 2,
-}
 
 
 def _norm_email(raw: str) -> str:
@@ -55,7 +47,15 @@ class DigestContactStore:
 
     def role_of(self, email: str) -> str | None:
         entry = self._contacts.get(_norm_email(email))
-        return entry.role if entry else None
+        if entry is None:
+            return None
+        # Resolve through an entity merge (M2/J4): an alias's own stored role can go stale if the
+        # canonical was later re-roled, so the canonical's role is authoritative for all its aliases.
+        if entry.alias_of:
+            canonical = self._contacts.get(entry.alias_of)
+            if canonical is not None:
+                return canonical.role
+        return entry.role
 
     def add_auto(self, email: str, reason: str) -> None:
         """Promote a previously-unknown human (called by mail_evidence.condition on T2 promotion)."""

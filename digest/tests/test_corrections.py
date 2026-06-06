@@ -152,3 +152,67 @@ def test_model_output_corrections_parse_and_validate():
     assert o.corrections[0].kind == "retract_knowledge"
     with pytest.raises(ValueError):
         ModelOutput.from_dict({"corrections": [{"kind": "bogus"}]})
+
+
+# ── M1: knowledge store gains the same provenance guard the contact store has ──
+# A model-sourced retract/replace must NOT destroy an Avigail-confirmed note (the inverse of the H2
+# guarantee). Reuse SOURCE_RANK: a writer may only remove/replace notes its source outranks-or-equals.
+
+
+def test_model_supersede_cannot_remove_confirmed_note():
+    k = KnowledgeStore()
+    k.add_general("Rock Design is a separate vendor", date="d", source="agent")
+    k.add_general("Rock Design is Idan Damti, one person.", date="d", source="feedback")
+    removed = k.supersede("rock design", date="2026-06-06", source="model")
+    notes = k.general_notes()
+    assert removed == 1  # only the agent note (model can't touch the confirmed one)
+    assert not any("separate vendor" in n for n in notes)
+    assert any("one person" in n for n in notes)  # confirmed survives a model retract
+
+
+def test_feedback_supersede_removes_even_a_confirmed_note():
+    k = KnowledgeStore()
+    k.add_general("Rock Design is Idan", date="d", source="feedback")
+    removed = k.supersede("rock design", date="2026-06-06", source="feedback")
+    assert removed == 1 and not k.general_notes()  # human outranks anything
+
+
+def test_model_superset_does_not_replace_confirmed_note():
+    k = KnowledgeStore()
+    k.add_general("Rock Design is Idan", date="d", source="feedback")
+    # A richer model paraphrase must not silently drop the shorter confirmed note.
+    k.add_general(
+        "Rock Design is Idan Damti, the web dev for SPRIG", date="d", source="model"
+    )
+    assert any(
+        o.note == "Rock Design is Idan" and o.source == "feedback" for o in k.general
+    )
+
+
+# ── M2: role_of resolves through alias_of so an alias's role never goes stale (J4) ──
+
+
+def test_role_of_resolves_through_alias_after_canonical_set_role():
+    c = DigestContactStore()
+    c.merge(
+        ["idandamti@ula.co.il", "idan@rockdesign.co.il"],
+        role="subcontractor",
+        source="model",
+        reason="same person",
+    )
+    # A later authoritative correction on the canonical only — the alias must follow it.
+    c.set_role("idandamti@ula.co.il", role="client", source="feedback")
+    assert c.role_of("idan@rockdesign.co.il") == "client"
+
+
+# ── M3: a forget/retract echoes what it removed (visible blast radius) ──
+
+
+def test_supersede_logs_removed_notes(caplog):
+    import logging
+
+    k = KnowledgeStore()
+    k.add_general("Rock Design is a separate vendor", date="d", source="agent")
+    with caplog.at_level(logging.INFO, logger="digest.knowledge"):
+        k.supersede("rock design", date="2026-06-06", source="feedback")
+    assert any("separate vendor" in r.getMessage() for r in caplog.records)

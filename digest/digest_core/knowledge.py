@@ -13,11 +13,14 @@ Avigail's corrections) remains phase 2.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import asdict
 from pathlib import Path
 
-from digest_core.state import Observation
+from digest_core.state import SOURCE_RANK, Observation
+
+log = logging.getLogger("digest.knowledge")
 
 
 def _norm_note(s: str) -> str:
@@ -40,12 +43,16 @@ class KnowledgeStore:
         n = _norm_note(text)
         if not n:
             return
+        new_rank = SOURCE_RANK.get(source, 0)
         kept: list[Observation] = []
         for o in self.general:
             eo = _norm_note(o.note)
             if n == eo or n in eo:  # an existing note already covers this -> don't add
                 return
-            if eo in n:  # the new note is richer -> replace the shorter existing
+            # The new note is richer (a superset) -> replace the shorter existing — but only when the
+            # writer outranks-or-equals it (M1). A model paraphrase must not drop a confirmed note;
+            # in that case keep BOTH (the confirmed fact stands, the elaboration is appended).
+            if eo in n and SOURCE_RANK.get(o.source, 0) <= new_rank:
                 continue
             kept.append(o)
         kept.append(Observation(date=date, source=source, note=text))
@@ -59,18 +66,32 @@ class KnowledgeStore:
         date: str,
         source: str = "feedback",
     ) -> int:
-        """Correction primitive: REMOVE every general note containing ``match`` (case-insensitive) so a
-        false fact doesn't linger, then optionally record the corrected ``note``. Returns the count
-        removed. Used by both Avigail's feedback and the reasoner's own corrections."""
+        """Correction primitive: REMOVE every general note containing ``match`` (case-insensitive) whose
+        source the writer outranks-or-equals (M1 — a model retract may not erase an Avigail-confirmed
+        note), then optionally record the corrected ``note``. Returns the count removed; the removed
+        texts are logged so the blast radius of an unanchored ``# forget:`` is visible (M3). Used by both
+        Avigail's feedback and the reasoner's own corrections."""
         m = match.strip().lower()
         if not m:
             return 0
-        before = len(self.general)
-        self.general = [o for o in self.general if m not in o.note.lower()]
-        removed = before - len(self.general)
+        rank = SOURCE_RANK.get(source, 0)
+
+        def _removable(o: Observation) -> bool:
+            return m in o.note.lower() and SOURCE_RANK.get(o.source, 0) <= rank
+
+        gone = [o for o in self.general if _removable(o)]
+        if gone:
+            self.general = [o for o in self.general if not _removable(o)]
+            log.info(
+                "supersede(%r, source=%s): retracted %d note(s): %s",
+                match,
+                source,
+                len(gone),
+                "; ".join(o.note for o in gone),
+            )
         if note:
             self.add_general(note, date=date, source=source)
-        return removed
+        return len(gone)
 
     def general_notes(self, *, mark_confirmed: bool = False) -> list[str]:
         """Notes for the reasoning packet. With ``mark_confirmed``, feedback-sourced notes (Avigail's
