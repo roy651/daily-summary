@@ -33,6 +33,27 @@ class KnowledgeStore:
                 Observation(date=date, source=source, note=note.strip())
             )
 
+    def supersede(
+        self,
+        match: str,
+        *,
+        note: str | None = None,
+        date: str,
+        source: str = "feedback",
+    ) -> int:
+        """Correction primitive: REMOVE every general note containing ``match`` (case-insensitive) so a
+        false fact doesn't linger, then optionally record the corrected ``note``. Returns the count
+        removed. Used by both Avigail's feedback and the reasoner's own corrections."""
+        m = match.strip().lower()
+        if not m:
+            return 0
+        before = len(self.general)
+        self.general = [o for o in self.general if m not in o.note.lower()]
+        removed = before - len(self.general)
+        if note:
+            self.add_general(note, date=date, source=source)
+        return removed
+
     def general_notes(self, *, mark_confirmed: bool = False) -> list[str]:
         """Notes for the reasoning packet. With ``mark_confirmed``, feedback-sourced notes (Avigail's
         own corrections) are tagged so the reasoner treats them as authoritative over its own guesses

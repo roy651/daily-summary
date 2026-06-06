@@ -13,6 +13,8 @@ import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from digest_core.schema import Correction
+
 _CHECKED = re.compile(r"^\s*-\s*\[[xX]\]\s*(.+?)\s*$")
 _UNCHECKED = re.compile(r"^\s*-\s*\[\s\]\s*(.+?)\s*$")
 _MARKER = re.compile(r"\s*<!--.*?-->\s*$")
@@ -36,6 +38,9 @@ class FeedbackRecord:
     revived_projects: list[str] = field(
         default_factory=list
     )  # project ids to bring back to active
+    corrections: list[Correction] = field(
+        default_factory=list
+    )  # retract-knowledge / merge-contacts reconciliations (# forget: / # alias:)
     freeform_notes: str = ""
 
     def save(self, path: str | Path) -> None:
@@ -58,6 +63,15 @@ def _clean(line: str) -> str:
 
 def _thread_ids(rest: str) -> list[str]:
     return [tid for tid in re.split(r"[,\s]+", rest.strip()) if tid]
+
+
+def _parse_alias(rest: str) -> tuple[list[str], str | None]:
+    """`a@x, b@y = subcontractor` -> (["a@x","b@y"], "subcontractor"). Role optional."""
+    role: str | None = None
+    if "=" in rest:
+        rest, raw_role = rest.rsplit("=", 1)
+        role = raw_role.strip().lower() or None
+    return _thread_ids(rest), role
 
 
 # Boundary of the quoted/original message in an email reply — her actual feedback is the text ABOVE it
@@ -110,6 +124,15 @@ def parse_todos_md(text: str, *, run_date: str) -> FeedbackRecord:
             fb.archived_projects.extend(_thread_ids(s.split(":", 1)[1]))
         elif low.startswith("# revive:"):
             fb.revived_projects.extend(_thread_ids(s.split(":", 1)[1]))
+        elif low.startswith("# forget:"):
+            if match := s.split(":", 1)[1].strip():
+                fb.corrections.append(Correction(kind="retract_knowledge", match=match))
+        elif low.startswith("# alias:"):
+            emails, role = _parse_alias(s.split(":", 1)[1])
+            if emails:
+                fb.corrections.append(
+                    Correction(kind="merge_contacts", emails=emails, role=role)
+                )
         elif low.startswith(("# notes:", "# note:")):
             if note := s.split(":", 1)[1].strip():
                 notes.append(note)
@@ -137,6 +160,15 @@ def parse_reply(body: str, *, run_date: str) -> FeedbackRecord:
             fb.archived_projects.extend(_thread_ids(stripped.split(":", 1)[1]))
         elif lower.startswith("revive:"):
             fb.revived_projects.extend(_thread_ids(stripped.split(":", 1)[1]))
+        elif lower.startswith("forget:"):
+            if match := stripped.split(":", 1)[1].strip():
+                fb.corrections.append(Correction(kind="retract_knowledge", match=match))
+        elif lower.startswith("alias:"):
+            emails, role = _parse_alias(stripped.split(":", 1)[1])
+            if emails:
+                fb.corrections.append(
+                    Correction(kind="merge_contacts", emails=emails, role=role)
+                )
         else:
             notes.append(stripped)
     fb.freeform_notes = " ".join(notes)

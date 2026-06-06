@@ -55,3 +55,4 @@ def test_todos_feedback_template_is_parse_safe():
     assert fb.suppressed_threads == []
     assert fb.freeform_notes == ""
     assert fb.eod_actuals == []
+    assert fb.corrections == []  # empty # forget:/# alias: placeholders are no-ops

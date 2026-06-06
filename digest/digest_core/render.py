@@ -192,10 +192,13 @@ def _feedback_template() -> list[str]:
         "## ✎ Feedback (optional) — fill any line, save; it's applied next run, then resets",
         "<!-- check off done items above with [x]. Then, after each tag below, add ids/text:",
         "     archive = a finished/dormant project · revive = bring one back · suppress = hide a thread",
-        "     note = tell me anything, incl. fixing who someone is (e.g. an entity/role correction) -->",
+        "     forget = delete a wrong fact (paste a bit of its text) · alias = these emails are one person",
+        "     note = tell me anything else -->",
         "# archive: ",
         "# revive: ",
         "# suppress: ",
+        "# forget: ",
+        "# alias: ",
         "# notes: ",
     ]
 

@@ -135,6 +135,34 @@ class Unresolved:
         )
 
 
+CORRECTION_KINDS = frozenset({"retract_knowledge", "merge_contacts"})
+
+
+@dataclass
+class Correction:
+    """A reconciliation the reasoner (or Avigail) makes so a false fact doesn't linger:
+    * retract_knowledge — remove general knowledge notes matching ``match``, optionally add ``note``;
+    * merge_contacts   — declare ``emails`` are one entity, set their ``role``, record ``note``."""
+
+    kind: str
+    match: str = ""
+    note: str = ""
+    emails: list[str] = field(default_factory=list)
+    role: str | None = None
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Correction:
+        kind = _require(d, "kind", "correction")
+        _check(kind, CORRECTION_KINDS, "correction kind")
+        return cls(
+            kind=kind,
+            match=d.get("match", ""),
+            note=d.get("note", ""),
+            emails=list(d.get("emails", [])),
+            role=d.get("role"),
+        )
+
+
 @dataclass
 class Insight:
     """A tacit-knowledge note. scope = "general" (-> knowledge store) or a client_id (-> that client)."""
@@ -156,6 +184,8 @@ class ModelOutput:
     digest_updates: list[DigestUpdate] = field(default_factory=list)
     unresolved: list[Unresolved] = field(default_factory=list)
     insights: list[Insight] = field(default_factory=list)
+    # Reconciliations the reasoner makes so a false fact doesn't linger (retract knowledge / merge contacts).
+    corrections: list[Correction] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> ModelOutput:
@@ -169,4 +199,5 @@ class ModelOutput:
             ],
             unresolved=[Unresolved.from_dict(u) for u in d.get("unresolved", [])],
             insights=[Insight.from_dict(i) for i in d.get("insights", [])],
+            corrections=[Correction.from_dict(c) for c in d.get("corrections", [])],
         )

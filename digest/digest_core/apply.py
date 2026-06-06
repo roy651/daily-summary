@@ -212,6 +212,33 @@ def apply_insights(
             _append_observations(by_id[ins.scope], [ins.note], run_date)
 
 
+def apply_corrections(
+    corrections, knowledge: KnowledgeStore, contacts, *, run_date: str, source: str
+) -> None:
+    """Apply reconciliations so a false fact doesn't linger — from the reasoner (source='model') or
+    Avigail's feedback (source='feedback', which outranks the model in the contact store):
+      * retract_knowledge — drop knowledge notes matching ``match`` (optionally add a corrected note);
+      * merge_contacts    — set the corrected role on each aliased email + record the alias as knowledge.
+    """
+    for c in corrections:
+        if c.kind == "retract_knowledge":
+            knowledge.supersede(
+                c.match, note=(c.note or None), date=run_date, source=source
+            )
+        elif c.kind == "merge_contacts":
+            emails = [e for e in c.emails if _looks_like_email(e)]
+            if c.role:
+                for e in emails:
+                    contacts.set_role(
+                        e, role=c.role, source=source, reason="entity correction"
+                    )
+            note = c.note or (
+                f"{', '.join(emails)} are the same entity." if emails else ""
+            )
+            if note:
+                knowledge.add_general(note, date=run_date, source=source)
+
+
 def upsert_clients(
     projects: list[Project], existing: list[ClientProfile] | None = None
 ) -> list[ClientProfile]:

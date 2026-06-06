@@ -15,6 +15,7 @@ from pathlib import Path
 from mail_evidence.records import Thread
 
 from digest_core.apply import (
+    apply_corrections,
     apply_insights,
     apply_model_output,
     promote_work_contacts,
@@ -118,6 +119,15 @@ def run_digest(
                 feedback.freeform_notes.strip(), date=run_date, source="feedback"
             )
         suppressed.update(feedback.suppressed_threads)
+        # Apply Avigail's explicit corrections (retract false knowledge / merge contacts) BEFORE the
+        # packet, so the reasoner sees the corrected world this run. Feedback outranks the model.
+        apply_corrections(
+            feedback.corrections,
+            knowledge,
+            contacts,
+            run_date=run_date,
+            source="feedback",
+        )
 
     cleaned = unify(threads, self_addresses=self_addresses)
     # N2: demote clear bulk/marketing so the model isn't buried in noise — but surface what we dropped.
@@ -147,6 +157,11 @@ def run_digest(
     clients = upsert_clients(projects, clients)
     promote_work_contacts(projects, clients, contacts, run_date=run_date)
     apply_insights(output, clients, knowledge, run_date=run_date)
+    # The reasoner's own reconciliations (e.g. it noticed two addresses are one person and retracts the
+    # stale "distinct" note + merges the contacts). Model-sourced: won't override a human-set role.
+    apply_corrections(
+        output.corrections, knowledge, contacts, run_date=run_date, source="model"
+    )
 
     # Evidence-based reversible closure: fully-billed + silent projects auto-archive (billed this run
     # had its activity floored to run_date, so it won't archive until silence actually accrues).

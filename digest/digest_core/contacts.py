@@ -14,6 +14,7 @@ from email.utils import parseaddr
 from pathlib import Path
 
 CONTACT_ROLES = frozenset({"client", "agent", "subcontractor", "end_client", "other"})
+_HUMAN_SOURCES = frozenset({"bootstrap", "manual", "feedback"})
 
 
 def _norm_email(raw: str) -> str:
@@ -77,6 +78,24 @@ class DigestContactStore:
         self._contacts[key] = ContactEntry(
             role=role, source=source, reason=reason, added=added
         )
+
+    def set_role(self, email: str, *, role: str, source: str, reason: str = "") -> None:
+        """Correction primitive: force a role (bypasses the sticky-first-role guard). A model-sourced
+        correction still must NOT override a human-set role; a human correction (feedback) overrides
+        anything. Used to reconcile a mis-identified entity (e.g. alias idan@rockdesign -> subcontractor)."""
+        if role not in CONTACT_ROLES:
+            raise ValueError(
+                f"invalid contact role: {role!r} (allowed: {sorted(CONTACT_ROLES)})"
+            )
+        key = _norm_email(email)
+        existing = self._contacts.get(key)
+        if (
+            existing
+            and existing.source in _HUMAN_SOURCES
+            and source not in _HUMAN_SOURCES
+        ):
+            return  # never let a model correction clobber a human-confirmed role
+        self._contacts[key] = ContactEntry(role=role, source=source, reason=reason)
 
     def entry(self, email: str) -> ContactEntry | None:
         return self._contacts.get(_norm_email(email))

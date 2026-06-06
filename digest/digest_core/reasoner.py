@@ -149,6 +149,23 @@ MODEL_OUTPUT_SCHEMA: dict[str, Any] = {
                 "required": ["scope", "note"],
             },
         },
+        "corrections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": ["retract_knowledge", "merge_contacts"],
+                    },
+                    "match": {"type": "string"},
+                    "note": {"type": "string"},
+                    "emails": {"type": "array", "items": {"type": "string"}},
+                    "role": {"type": ["string", "null"]},
+                },
+                "required": ["kind"],
+            },
+        },
     },
     "required": ["project_updates", "digest_updates", "unresolved", "insights"],
 }
@@ -168,6 +185,12 @@ _REASONER_SYSTEM = (
     "- AUTHORITY: a knowledge note tagged [AVIGAIL-CONFIRMED] is a correction from Avigail herself — "
     "follow it over your own inference AND over any older/contradicting note (e.g. if she says two email "
     "addresses are the same person, treat them as one; do NOT re-assert they're distinct).\n"
+    "- CORRECTIONS: don't let a false fact linger. When a [AVIGAIL-CONFIRMED] note (or clear evidence) "
+    "contradicts an existing knowledge note or contact role, emit a `corrections` entry to fix it: "
+    "{kind:'retract_knowledge', match:'<substring of the stale note>', note:'<corrected note>'} to drop "
+    "the wrong note, and/or {kind:'merge_contacts', emails:[...], role:'subcontractor', note:'...'} to "
+    "declare addresses are one person and set the right role. Reconcile rather than just adding a "
+    "contradicting note.\n"
     "- ENTITY ROLES (see the packet glossary): someone who INVOICES Avigail or whose output FEEDS her "
     "deliverables is a SUBCONTRACTOR; someone who COORDINATES on the agency side is an AGENT. Neither is "
     "a client — their work belongs as todos (verify_subcontractor / communicate_client) under the real "
