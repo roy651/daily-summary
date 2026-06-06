@@ -9,22 +9,21 @@ import pytest
 from digest_core.delivery import EmailDelivery, FileDelivery, select_delivery
 
 
-def test_file_delivery_writes_both_files(tmp_path):
+def test_file_delivery_deliver_is_no_op_send(tmp_path):
+    # The pipeline (run_digest) writes the artifacts now; the file backend's deliver is a no-op send.
     d = FileDelivery(out_dir=tmp_path)
     result = d.deliver("# digest\n", "# todos\n", run_date="2026-06-05")
-    assert (tmp_path / "digest_2026-06-05.md").read_text() == "# digest\n"
-    assert (tmp_path / "todos.md").read_text() == "# todos\n"
-    assert result.sent is True
+    assert result.sent is True and result.backend == "file"
+    assert not (tmp_path / "digest_2026-06-05.md").exists()
 
 
 def test_file_delivery_collect_feedback_reads_edits(tmp_path):
-    d = FileDelivery(out_dir=tmp_path)
-    d.deliver(
-        "# digest\n",
+    # The edited todos.md (written by the pipeline) is read back as feedback.
+    (tmp_path / "todos.md").write_text(
         "# todos\n## Urgent\n- [x] [self] done thing  (ivory) <!-- p2 -->\n",
-        run_date="2026-06-05",
+        encoding="utf-8",
     )
-    feedback = d.collect_feedback(run_date="2026-06-05")
+    feedback = FileDelivery(out_dir=tmp_path).collect_feedback(run_date="2026-06-05")
     assert feedback is not None
     assert any("done thing" in t for t in feedback.eod_actuals)
 

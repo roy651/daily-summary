@@ -140,6 +140,13 @@ def run_digest(
     todos_md = render_todos_md(
         prioritize(projects, run_date=run_date), run_date=run_date
     )
+    # Always write the readable artifacts to out/ — they're the canonical output and the editable
+    # feedback surface, so a `--dry-run` (which sends/persists nothing) still leaves them to inspect.
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / f"digest_{run_date}.md").write_text(digest_md, encoding="utf-8")
+    (out_dir / "todos.md").write_text(todos_md, encoding="utf-8")
+    # Delivery is the SEND step (email backend, unless dry); the file backend is a no-op given the above.
     result = delivery.deliver(digest_md, todos_md, run_date=run_date)
 
     if persist:

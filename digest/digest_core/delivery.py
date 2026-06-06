@@ -2,7 +2,7 @@
 
 FileDelivery (default) writes the digest + an editable todo file and reads edits back as feedback.
 EmailDelivery (built now, flag-off) sends the digest to Avigail's own address only — the one
-invariant — and never sends under DRY_RUN. Selection is by the ``DELIVERY`` env var.
+invariant — and never sends on a --dry-run. Selection is by the ``DELIVERY`` env var.
 """
 
 from __future__ import annotations
@@ -22,7 +22,8 @@ class DeliveryResult:
 
 
 class FileDelivery:
-    """Write digest + editable todos to a local directory; read the edited todos back as feedback."""
+    """The no-send backend: the pipeline already wrote the digest + editable todos to out/, so delivery
+    is a no-op here. Reads the edited todos back as feedback on the next run."""
 
     def __init__(self, out_dir: str | Path) -> None:
         self.out_dir = Path(out_dir)
@@ -30,10 +31,9 @@ class FileDelivery:
     def deliver(
         self, digest_md: str, todos_md: str, *, run_date: str
     ) -> DeliveryResult:
-        self.out_dir.mkdir(parents=True, exist_ok=True)
-        (self.out_dir / f"digest_{run_date}.md").write_text(digest_md, encoding="utf-8")
-        (self.out_dir / "todos.md").write_text(todos_md, encoding="utf-8")
-        return DeliveryResult(backend="file", sent=True, detail=str(self.out_dir))
+        return DeliveryResult(
+            backend="file", sent=True, detail=f"written to {self.out_dir}"
+        )
 
     def collect_feedback(self, *, run_date: str) -> FeedbackRecord | None:
         todos = self.out_dir / "todos.md"
@@ -86,7 +86,7 @@ class EmailDelivery:
             return DeliveryResult(
                 backend="email",
                 sent=False,
-                detail=f"DRY_RUN would send to {recipient}: {subject}",
+                detail=f"dry-run: would send to {recipient}: {subject}",
             )
 
         self._send_smtp(recipient, subject, digest_md + "\n\n---\n\n" + todos_md)
@@ -117,8 +117,10 @@ class EmailDelivery:
 
 
 def select_delivery(
-    env: Mapping[str, str], *, out_dir: str | Path
+    env: Mapping[str, str], *, out_dir: str | Path, dry_run: bool = False
 ) -> FileDelivery | EmailDelivery:
+    """Pick the delivery backend by DELIVERY. ``dry_run`` (from the CLI --dry-run flag, the single
+    preview knob) makes EmailDelivery report what it WOULD send without sending."""
     backend = env.get("DELIVERY", "file").strip().lower()
     if backend == "email":
         return EmailDelivery(
@@ -127,6 +129,6 @@ def select_delivery(
             smtp_port=int(env.get("SMTP_PORT", "465")),
             user=env.get("SMTP_USER", ""),
             password=env.get("SMTP_APP_PASSWORD", ""),
-            dry_run=env.get("DRY_RUN", "true").strip().lower() != "false",
+            dry_run=dry_run,
         )
     return FileDelivery(out_dir=out_dir)

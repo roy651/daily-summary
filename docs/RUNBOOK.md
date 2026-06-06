@@ -37,10 +37,13 @@ OpenAI-compatible). See `.env.example`.
 ## On-demand run (headless — produce today's digest)
 
 Reads **both** mailboxes (`IMAP_ACCOUNTS=ula,gmail`) since each account's watermark, reasons, emails
-Avigail, persists state, and advances the watermarks. Two independent safety knobs:
-- **`DRY_RUN`** (env): `true` = reason + render but **do not actually send** (logs "would send"). Flip
-  to `false` to send for real.
-- **`--dry-run`** (CLI flag): additionally skip **persisting state + advancing the watermark** (pure preview).
+Avigail, persists state, and advances the watermarks. **One knob — the `--dry-run` flag:**
+- `daily --dry-run` → pull + reason + write the `out/` artifacts to read, but **don't** send, persist, or move the watermark.
+- `daily` → real run: send to Avigail, persist state, advance per-account watermarks.
+
+The digest **window** is automatic: it highlights everything since the last run (extends back to the
+oldest watermark, minimum 2 days) and just warns if that span exceeds a month — so you never reason
+about the window. Override only for backlog/re-bootstrap: `--since YYYY-MM-DD` or `--window-days N`.
 
 The CLI loads `./.env` itself (via python-dotenv) — **do not `source` the `.env`** (it isn't shell
 script; sourcing it can execute stray words). Just run from the repo directory:
@@ -48,14 +51,14 @@ script; sourcing it can execute stray words). Just run from the repo directory:
 ```bash
 cd /path/to/daily-summary
 
-# 1) Preview — pull + reason + render, nothing sent, nothing persisted:
+# 1) Preview — pull both mailboxes, reason via your subscription, write out/digest_<date>.md to read.
+#    Nothing sent, nothing persisted, watermark unchanged:
 uv run python -m digest_core.cli daily --dry-run
 
-# 2) Real run — pull both mailboxes, reason via your subscription, email Avigail,
-#    persist state, advance per-account watermarks (set DRY_RUN=false in .env to actually send):
-DRY_RUN=false uv run python -m digest_core.cli daily
+# 2) Real run — same, then email Avigail, persist state, advance both watermarks:
+uv run python -m digest_core.cli daily
 
-# 3) Next morning — capture Avigail's reply (check-offs / # archive: / # suppress:) as feedback:
+# 3) (later) capture her feedback (file backend reads your edits to out/todos.md):
 uv run python -m digest_core.cli feedback
 ```
 
@@ -76,7 +79,7 @@ launchd (macOS) — run a small wrapper at 07:00 daily:
 ```bash
 # run-digest.sh   (the CLI loads ./.env itself — no `source` needed)
 cd /path/to/daily-summary || exit 1
-DRY_RUN=false uv run python -m digest_core.cli daily >> state/cron.log 2>&1
+uv run python -m digest_core.cli daily >> state/cron.log 2>&1
 ```
 ```
 launchctl ... StartCalendarInterval { Hour=7, Minute=0 }  → run-digest.sh

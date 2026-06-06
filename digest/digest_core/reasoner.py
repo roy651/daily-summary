@@ -298,7 +298,13 @@ class CodeReasoner:
         ]
         if self.model:
             cmd += ["--model", self.model]
-        subprocess.run(cmd, check=True, timeout=self.timeout)
+        # Capture (don't stream) claude's own output so it doesn't flood a cron/terminal log; surface it
+        # only if claude fails non-zero, where its message is the actionable diagnostic.
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout)
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"`claude -p` failed (exit {proc.returncode}): {(proc.stderr or proc.stdout or '').strip()[:500]}"
+            )
 
 
 class ApiReasoner:

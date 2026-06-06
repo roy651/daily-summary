@@ -50,6 +50,31 @@ def _today() -> str:
     return date.today().isoformat()
 
 
+_MIN_WINDOW_DAYS = 2  # a digest always highlights at least the last 2 days...
+
+
+def _digest_window_since(args, state_dir: Path, run_date: str) -> str:
+    """The 'highlight as recent' window start. Prescribed windows win: --since DATE, or --window-days N
+    (use for backlog / re-bootstrap). Otherwise AUTO: at least MIN days back, but extend as far as the
+    oldest per-account watermark, so a late/skipped run still highlights everything that was pulled —
+    the model never has to reason about the window itself."""
+    if args.since:
+        return args.since
+    rd = date.fromisoformat(run_date)
+    if args.window_days is not None:
+        return (rd - timedelta(days=args.window_days)).isoformat()
+    floor = (rd - timedelta(days=_MIN_WINDOW_DAYS)).isoformat()
+    try:
+        from mail_evidence import load_watermark
+        from mail_evidence.config import load_imap_accounts
+
+        marks = [load_watermark(state_dir, name=a.name) for a in load_imap_accounts()]
+        dates = [m.date().isoformat() for m in marks if m]
+    except Exception:  # offline / no accounts configured — just use the floor
+        dates = []
+    return min([floor, *dates]) if dates else floor
+
+
 def _load_state(
     state_dir: Path,
 ) -> tuple[list[Project], list[ClientProfile], DigestContactStore]:
@@ -123,10 +148,15 @@ def _cmd_daily(args, env: Mapping[str, str]) -> int:
     state_dir, out_dir = Path(args.state_dir), Path(args.out_dir)
     projects, clients, contacts, knowledge = _load_state(state_dir)
     run_date = args.as_of or _today()
-    since = (
-        args.since
-        or (date.fromisoformat(run_date) - timedelta(days=args.window_days)).isoformat()
-    )
+    since = _digest_window_since(args, state_dir, run_date)
+    span = (date.fromisoformat(run_date) - date.fromisoformat(since)).days
+    if span > 31:
+        log.warning(
+            "digest window is %d days (since %s) — over a month. Proceeding; pass --since/--window-days "
+            "to constrain, or this is expected for a backlog/re-bootstrap run.",
+            span,
+            since,
+        )
 
     # Replay of a past day must be offline + non-mutating (F7): no live pull, no watermark.
     if args.as_of and not args.from_export:
@@ -151,7 +181,7 @@ def _cmd_daily(args, env: Mapping[str, str]) -> int:
     reasoner = select_reasoner(
         env, work_dir=state_dir, run_date=run_date, replay_path=env.get("REPLAY_OUTPUT")
     )
-    delivery = select_delivery(env, out_dir=out_dir)
+    delivery = select_delivery(env, out_dir=out_dir, dry_run=args.dry_run)
     try:
         result = run_digest(
             projects=projects,
@@ -325,8 +355,16 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--state-dir", default="state")
     d.add_argument("--out-dir", default="out")
     d.add_argument("--as-of")
-    d.add_argument("--since")
-    d.add_argument("--window-days", type=int, default=1)
+    d.add_argument(
+        "--since",
+        help="prescribe the digest window start (YYYY-MM-DD) — e.g. a backlog load",
+    )
+    d.add_argument(
+        "--window-days",
+        type=int,
+        default=None,
+        help="prescribe a fixed N-day window; default auto-extends from 2 days to the watermark",
+    )
     d.add_argument(
         "--from-export", help="ingest a local mail export instead of a live IMAP pull"
     )
@@ -371,7 +409,7 @@ def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None) ->
         level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stderr
     )
     # Load ./.env automatically (parsed safely by python-dotenv — never `source` it). Existing shell
-    # env wins (override=False), so `DRY_RUN=false uv run ... daily` still overrides the file.
+    # env wins (override=False), so `DELIVERY=file uv run ... daily` still overrides the file.
     from dotenv import load_dotenv
 
     load_dotenv()
