@@ -84,7 +84,8 @@ def run_digest(
     # CLOSE first (the "remove" half): consume Avigail's check-offs from the previous run's todos file
     # (or email reply) and clear those todos before composing today's digest. Highest-confidence closure.
     closed_from_feedback = 0
-    feedback = delivery.collect_feedback(run_date=run_date)
+    # File backend reads out/todos.md; email backend scans the just-pulled threads for Avigail's reply.
+    feedback = delivery.collect_feedback(run_date=run_date, threads=threads)
     if feedback:
         if feedback.eod_actuals:
             closed_from_feedback = close_todos_from_feedback(

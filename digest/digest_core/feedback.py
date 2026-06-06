@@ -59,6 +59,25 @@ def _thread_ids(rest: str) -> list[str]:
     return [tid for tid in re.split(r"[,\s]+", rest.strip()) if tid]
 
 
+# Boundary of the quoted/original message in an email reply — her actual feedback is the text ABOVE it
+# (top-posting). Covers English ("On … wrote:"), Hebrew ("… כתב/ה:"), Outlook headers, and quote lines.
+_QUOTE_BOUNDARY = re.compile(
+    r"^\s*(>|on .+wrote:|.*כתב/ה:|-{2,}\s*original message|from:\s|sent from my )",
+    re.IGNORECASE,
+)
+
+
+def _strip_quoted(body: str) -> str:
+    """Keep only the new reply text, dropping the quoted original (so the whole digest she replied to
+    doesn't get swept into freeform_notes)."""
+    kept: list[str] = []
+    for line in body.splitlines():
+        if _QUOTE_BOUNDARY.match(line):
+            break
+        kept.append(line)
+    return "\n".join(kept).strip()
+
+
 def parse_todos_md(text: str, *, run_date: str) -> FeedbackRecord:
     fb = FeedbackRecord(run_date=run_date)
     notes: list[str] = []
@@ -82,7 +101,7 @@ def parse_todos_md(text: str, *, run_date: str) -> FeedbackRecord:
 def parse_reply(body: str, *, run_date: str) -> FeedbackRecord:
     fb = FeedbackRecord(run_date=run_date)
     notes: list[str] = []
-    for line in body.splitlines():
+    for line in _strip_quoted(body).splitlines():
         stripped = line.strip()
         if not stripped:
             continue

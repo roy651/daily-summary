@@ -11,7 +11,7 @@ from digest_core.schema import ModelOutput
 
 
 class _StubDelivery:
-    def collect_feedback(self, *, run_date):
+    def collect_feedback(self, *, run_date, threads=None):
         return FeedbackRecord(
             run_date=run_date,
             freeform_notes="Rock Design is just Idan's studio (my web dev) — not a separate vendor.",

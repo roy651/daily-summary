@@ -35,7 +35,7 @@ class FileDelivery:
             backend="file", sent=True, detail=f"written to {self.out_dir}"
         )
 
-    def collect_feedback(self, *, run_date: str) -> FeedbackRecord | None:
+    def collect_feedback(self, *, run_date: str, threads=None) -> FeedbackRecord | None:
         todos = self.out_dir / "todos.md"
         if not todos.exists():
             return None
@@ -107,13 +107,29 @@ class EmailDelivery:
             smtp.send_message(msg)
 
     def collect_feedback(
-        self, *, run_date: str, reply_body: str | None = None
+        self, *, run_date: str, threads=None, reply_body: str | None = None
     ) -> FeedbackRecord | None:
-        # In production the reply arrives as an inbound thread (read via mail-evidence). Here we accept
-        # the already-extracted body; wiring the IMAP reply lookup is a daily.py/phase-2 concern.
-        if reply_body is None:
+        """Find Avigail's reply to the digest among the pulled threads and parse its directives. A reply
+        is a record FROM her address whose subject carries our digest tag but does NOT start with it
+        (i.e. it's an ``Re: digest: …``, not the outbound digest itself). The latest such reply wins.
+        ``reply_body`` lets a caller/test pass an extracted body directly."""
+        if reply_body is not None:
+            return parse_reply(reply_body, run_date=run_date)
+        if not threads:
             return None
-        return parse_reply(reply_body, run_date=run_date)
+        tag = self.SUBJECT_TAG.lower()
+        replies = [
+            r
+            for t in threads
+            for r in t.records
+            if self.to in (r.from_ or "").lower()
+            and tag in (r.subject or "").lower()
+            and not (r.subject or "").strip().lower().startswith(tag)
+        ]
+        if not replies:
+            return None
+        latest = max(replies, key=lambda r: r.date)
+        return parse_reply(latest.body_text or "", run_date=run_date)
 
 
 def select_delivery(

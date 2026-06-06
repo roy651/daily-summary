@@ -7,8 +7,12 @@ digest is delivered by email it lands back in the inbox, and must never be read 
 
 from __future__ import annotations
 
+import re
+
 from mail_evidence import RelevanceDecision
 from mail_evidence.records import EvidenceRecord, Thread
+
+_RE_FWD_PREFIX = re.compile(r"^((re|fwd|fw)\s*:\s*)+", re.IGNORECASE)
 
 
 class KeepAllHumanJudge:
@@ -25,10 +29,14 @@ class KeepAllHumanJudge:
 def is_self_generated(
     record: EvidenceRecord, *, digest_subject_tag: str = "digest:"
 ) -> bool:
-    """True iff this record is one of our own delivered digests (recognized by its subject tag)."""
+    """True iff this record is one of our own delivered digests OR Avigail's reply to one (both
+    recognized by the subject tag). The digest lands back in the inbox when delivered by email, and
+    her reply is the feedback channel — neither must be read as project evidence by the reasoner.
+    Stripping a leading Re:/Fwd: is what catches the reply (``Re: digest: …``)."""
     if record.source != "email" or not record.subject:
         return False
-    return record.subject.strip().lower().startswith(digest_subject_tag.strip().lower())
+    subj = _RE_FWD_PREFIX.sub("", record.subject.strip().lower())
+    return subj.startswith(digest_subject_tag.strip().lower())
 
 
 # Conservative, STRUCTURAL marketing/bulk signals only (N2). Deliberately NOT keyed off language or
