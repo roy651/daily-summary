@@ -1,8 +1,9 @@
 """Feedback channel — parse Avigail's corrections (docs/04-delivery.md).
 
-Captured in v1, consumed in phase 2. Two inputs: the edited todo file (checkbox state + ``#
-suppress:`` / ``# notes:`` directives) and an email reply body (``done:`` / ``suppress:`` lines, rest
-treated as freeform). Records persist to ``state/feedback/``.
+Captured AND consumed (run_digest applies it). Two inputs: the edited todo file (checkbox state + ``#
+archive:`` / ``# revive:`` / ``# suppress:`` / ``# notes:`` directives) and an email reply body
+(``done:`` / ``archive:`` / ``revive:`` / ``suppress:`` lines, rest treated as freeform → knowledge).
+Records persist to ``state/feedback/``.
 """
 
 from __future__ import annotations

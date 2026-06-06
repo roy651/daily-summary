@@ -58,9 +58,17 @@ uv run python -m digest_core.cli daily --dry-run
 # 2) Real run — same, then email Avigail, persist state, advance both watermarks:
 uv run python -m digest_core.cli daily
 
-# 3) (later) capture her feedback (file backend reads your edits to out/todos.md):
+# 3) feedback is automatic on the NEXT run: the email backend finds her reply to the digest in the
+#    pulled mail and applies it (done:/archive:/revive:/suppress: + free-text notes -> knowledge).
+#    File backend instead reads your edits to out/todos.md; `feedback` captures it without a model pass:
 uv run python -m digest_core.cli feedback
 ```
+
+**How Avigail corrects things** (e.g. "Rock Design is just Idan, my web dev — not a separate vendor"):
+reply to the digest email (or edit `out/todos.md` on the file backend). Lines like `done: …`,
+`archive: <project-id>`, `suppress: <thread-id>` are applied as directives; any other prose becomes a
+**knowledge note** the reasoner reads next run and trusts over its own guess. Her reply is recognised
+by the `digest:` subject tag and is never fed back in as project evidence.
 
 First-ever live run: seed the watermark so it doesn't cold-start the whole window
 (`FetchConfig` already bounds a cold start to 35 days / 500 msgs):
