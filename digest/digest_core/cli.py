@@ -263,14 +263,25 @@ def _live_pull(env: Mapping[str, str], contacts: DigestContactStore, state_dir: 
     threads: list = []
     highwater: list[tuple[str, object]] = []
     for acct in accounts:
+        watermark = load_watermark(state_dir, name=acct.name)
+        log.info(
+            "pull account=%s host=%s inbox=%r sent=%r since=%s",
+            acct.name,
+            acct.host,
+            acct.inbox_folder,
+            acct.sent_folder,
+            watermark.isoformat() if watermark else "cold start",
+        )
         client = ImapClient(
             acct.host, acct.port, acct.user, acct.password, mailbox=acct.inbox_folder
         )
-        watermark = load_watermark(state_dir, name=acct.name)
+        # Per-account folders — Gmail's sent folder is '[Gmail]/Sent Mail', not 'Sent' (the override
+        # comes from IMAP_<NAME>_SENT). Without this the default FetchConfig asks every account for 'Sent'.
+        config = FetchConfig(
+            inbox_folder=acct.inbox_folder, sent_folder=acct.sent_folder
+        )
         latest = watermark
-        for batch in run(
-            FetchConfig(), KeepAllHumanJudge(), contacts, client, watermark
-        ):
+        for batch in run(config, KeepAllHumanJudge(), contacts, client, watermark):
             threads.extend(batch)
             for t in batch:
                 for r in t.records:
