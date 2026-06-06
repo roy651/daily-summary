@@ -48,7 +48,20 @@ def test_state_review_lists_contacts_by_role():
         reason="billing",
     )
     c.add("jen@sprigconsulting.com", role="agent", source="model")
-    md = render_state_review_md([], [], c)
+    # A client WITH managing contacts guards against the `contacts` param being shadowed by the loop local.
+    from digest_core.state import ClientProfile, ManagingContact
+
+    clients = [
+        ClientProfile(
+            client_id="sprig",
+            display_name="SPRIG",
+            is_agency=True,
+            managing_contacts=[
+                ManagingContact(name="Jen", email="jen@sprigconsulting.com")
+            ],
+        )
+    ]
+    md = render_state_review_md(clients, [], c)
     assert "## Contacts & roles" in md
     assert "### subcontractor" in md and "idan@rockdesign.co.il" in md
     assert "### agent" in md and "jen@sprigconsulting.com" in md

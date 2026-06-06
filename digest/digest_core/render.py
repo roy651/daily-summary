@@ -225,10 +225,10 @@ def render_state_review_md(
         lines.append("_None._")
     for c in sorted(active, key=lambda c: c.client_id):
         agency = " — agency" if c.is_agency else ""
-        contacts = ", ".join(f"{m.name} <{m.email}>" for m in c.managing_contacts)
+        managing = ", ".join(f"{m.name} <{m.email}>" for m in c.managing_contacts)
         lines.append(f"- **{c.display_name}** (`{c.client_id}`){agency}")
-        if contacts:
-            lines.append(f"  - contacts: {contacts}")
+        if managing:
+            lines.append(f"  - contacts: {managing}")
         for o in c.observations:
             lines.append(f"  - _{o.date}_: {o.note}")
     lines.append("")

@@ -29,7 +29,11 @@ from digest_core.knowledge import KnowledgeStore
 from digest_core.packet import build_reasoning_packet
 from digest_core.reasoner import Reasoner, ReasoningPacket
 from digest_core.relevance import partition_marketing
-from digest_core.render import render_digest_md, render_todos_md
+from digest_core.render import (
+    render_digest_md,
+    render_state_review_md,
+    render_todos_md,
+)
 from digest_core.schema import ModelOutput
 from digest_core.state import ClientProfile, Project, write_clients, write_projects
 from digest_core.todos import (
@@ -188,6 +192,11 @@ def run_digest(
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / f"digest_{run_date}.md").write_text(digest_md, encoding="utf-8")
     (out_dir / "todos.md").write_text(todos_md, encoding="utf-8")
+    # Refresh the human-readable state map every run, so the audit surface (clients/projects/contacts &
+    # roles) is never stale. `digest review` regenerates the same on demand without a model pass.
+    (out_dir / "state-review.md").write_text(
+        render_state_review_md(clients, projects, contacts), encoding="utf-8"
+    )
     # Delivery is the SEND step (email backend, unless dry); the file backend is a no-op given the above.
     result = delivery.deliver(digest_md, todos_md, run_date=run_date)
 

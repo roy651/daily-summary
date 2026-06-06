@@ -32,6 +32,25 @@ def test_knowledge_supersede_removes_then_replaces():
     assert any("keep me" in n for n in notes)  # unrelated note untouched
 
 
+def test_knowledge_containment_dedup():
+    k = KnowledgeStore()
+    k.add_general("Idan is the web dev", date="d", source="agent")
+    k.add_general("Idan is the web dev", date="d", source="feedback")  # exact -> skip
+    assert len(k.general) == 1
+    k.add_general(
+        "Idan is the web dev for SPRIG", date="d", source="agent"
+    )  # superset -> replace
+    assert len(k.general) == 1 and "SPRIG" in k.general_notes()[0]
+    k.add_general(
+        "Idan is the web dev", date="d", source="agent"
+    )  # now contained -> skip
+    assert len(k.general) == 1
+    k.add_general(
+        "Nurit is an illustrator", date="d", source="agent"
+    )  # distinct -> kept
+    assert len(k.general) == 2
+
+
 def test_contacts_set_role_forces_but_human_outranks_model():
     c = DigestContactStore()
     c.add("idan@rockdesign.co.il", role="other", source="auto")
