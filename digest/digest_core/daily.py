@@ -100,6 +100,13 @@ def run_digest(
             if pid in by_id:
                 by_id[pid].status = "active"
                 by_id[pid].billed_on = None
+        # Route Avigail's free-text corrections into the knowledge store (provenance = feedback), so they
+        # reach the reasoner via the next packet and outrank its guesses — e.g. an entity fix like
+        # "Rock Design is just Idan's studio, my web dev — not a separate vendor".
+        if feedback.freeform_notes.strip():
+            knowledge.add_general(
+                feedback.freeform_notes.strip(), date=run_date, source="feedback"
+            )
 
     cleaned = unify(threads, self_addresses=self_addresses)
     # N2: demote clear bulk/marketing so the model isn't buried in noise — but surface what we dropped.
