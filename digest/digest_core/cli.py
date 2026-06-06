@@ -241,7 +241,9 @@ def _cmd_show(args, env: Mapping[str, str]) -> int:
 
 
 def _live_pull(env: Mapping[str, str], contacts: DigestContactStore, state_dir: Path):
-    """Read-only IMAP pull via mail-evidence. Returns (threads, commit_watermark_callable)."""
+    """Read-only IMAP pull via mail-evidence across ALL configured accounts (e.g. ULA + Gmail), each
+    with its OWN watermark. Returns (merged_threads, commit_watermarks_callable). Threads dedup by
+    Message-ID downstream, so overlapping accounts are safe. Watermarks advance only after delivery."""
     from mail_evidence import (
         FetchConfig,
         ImapClient,
@@ -249,20 +251,36 @@ def _live_pull(env: Mapping[str, str], contacts: DigestContactStore, state_dir: 
         load_watermark,
         run,
     )
+    from mail_evidence.config import load_imap_accounts
 
-    client = ImapClient.from_env(mailbox=env.get("IMAP_INBOX", "INBOX"))
-    watermark = load_watermark(state_dir)
-    threads = []
-    latest = watermark
-    for batch in run(FetchConfig(), KeepAllHumanJudge(), contacts, client, watermark):
-        threads.extend(batch)
-        for t in batch:
-            for r in t.records:
-                latest = r.date if latest is None or r.date > latest else latest
+    accounts = load_imap_accounts()
+    if not accounts:
+        raise RuntimeError(
+            "no IMAP accounts configured: set IMAP_ACCOUNTS=ula,gmail + IMAP_<NAME>_HOST/PORT/USER/"
+            "APP_PASSWORD (or legacy IMAP_HOST/IMAP_USER/IMAP_APP_PASSWORD for a single account)."
+        )
+
+    threads: list = []
+    highwater: list[tuple[str, object]] = []
+    for acct in accounts:
+        client = ImapClient(
+            acct.host, acct.port, acct.user, acct.password, mailbox=acct.inbox_folder
+        )
+        watermark = load_watermark(state_dir, name=acct.name)
+        latest = watermark
+        for batch in run(
+            FetchConfig(), KeepAllHumanJudge(), contacts, client, watermark
+        ):
+            threads.extend(batch)
+            for t in batch:
+                for r in t.records:
+                    latest = r.date if latest is None or r.date > latest else latest
+        if latest is not None and latest != watermark:
+            highwater.append((acct.name, latest))
 
     def commit():
-        if latest is not None:
-            commit_watermark(latest, state_dir)
+        for name, latest in highwater:
+            commit_watermark(latest, state_dir, name=name)
 
     return threads, commit
 

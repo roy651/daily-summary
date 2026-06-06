@@ -75,10 +75,15 @@ def test_session_refuses_output_stamped_for_another_day(tmp_path):
         _session(tmp_path, run_date="2026-06-05").reason(PACKET)
 
 
-def test_api_reasoner_fails_clearly_without_dependency():
+def test_api_reasoner_fails_clearly_without_dependency(monkeypatch):
     # The `anthropic` dep lives in the optional `api` extra; absent it, the error must be actionable.
+    import sys
+
+    monkeypatch.setitem(
+        sys.modules, "anthropic", None
+    )  # force ImportError on `import anthropic`
     with pytest.raises(RuntimeError, match="api"):
-        ApiReasoner().reason(PACKET)
+        ApiReasoner(run_date="2026-06-05", provider="anthropic").reason(PACKET)
 
 
 def test_select_reasoner_by_env(tmp_path):

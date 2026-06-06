@@ -9,8 +9,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Phase-2: headless reasoning via the Anthropic API. Not needed for the file-backend MVP.
-api = ["anthropic>=0.40"]
+# Cloud reasoning backends for REASONER=api (provider-agnostic). anthropic = Anthropic SDK;
+# openai = any OpenAI-compatible endpoint (OpenRouter / Together / local vLLM). Not needed for the
+# default REASONER=code (Claude Code subscription) or the file-backend MVP.
+api = ["anthropic>=0.40", "openai>=1.40"]
 
 [project.scripts]
 digest = "digest_core.cli:main"
