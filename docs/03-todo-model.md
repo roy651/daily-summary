@@ -1,6 +1,6 @@
 # 03 — TODO model + prioritization
 
-Code: `digest/digest_core/todos.py`. (Status: stub.)
+Code: `digest/digest_core/todos.py`.
 
 ## Categories (extensible enum — revisit with Avigail)
 
@@ -23,3 +23,14 @@ Deterministic tie-break (`project_id`) for golden-test stability.
 
 **Carry-forward:** open todos persist across runs; the deterministic layer never deletes one the
 model didn't address — it carries it and bumps staleness ("surface, don't drop").
+
+## Closure & decay
+
+Surface-don't-drop is balanced by deterministic closure so the list doesn't grow forever:
+- **Evidence-based closure** — the model's `closed_todos` / a `done`/`archived` project status retire
+  the matching todos (substring/normalized match).
+- **Feedback check-offs** — Avigail's `done:` directive closes a todo; `archive:`/`revive:` flip a
+  project (`docs/04`).
+- **Passive decay** — a project silent past a staleness threshold is marked suspected-dormant/stale
+  and surfaced as "confirm to clear", never silently dropped.
+- **Billing-based auto-archive** — reversible, driven by invoice signals (`docs/05` C2).

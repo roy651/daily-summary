@@ -42,9 +42,9 @@ layer, borrows (does not import) its `ClientProfile`/ledger shapes.
 
 | Area | Code | Spec to read first |
 | --- | --- | --- |
-| Domain state (clients/projects/tasks) | `digest/digest_core/state.py` | `docs/01-state-model.md` |
+| Domain state (clients/projects/tasks/contacts/knowledge) | `digest/digest_core/{state,contacts,knowledge}.py` | `docs/01-state-model.md` |
 | Pipeline (bootstrap + daily) | `digest/digest_core/{bootstrap,daily,cli}.py` | `docs/02-pipeline.md` |
-| Model seam | `digest/digest_core/reasoner.py`, `schema.py`, `apply.py` | `docs/05-model-seam.md` |
+| Model seam + corrections + billing | `digest/digest_core/{reasoner,schema,apply,billing}.py` | `docs/05-model-seam.md` |
 | TODO model + prioritization | `digest/digest_core/todos.py` | `docs/03-todo-model.md` |
 | Delivery + feedback | `digest/digest_core/{delivery,feedback}.py` | `docs/04-delivery.md` |
 | Shared input layer | `mail_evidence` (editable from sibling) | sibling `docs/mail-evidence-SPEC` |

@@ -1,6 +1,6 @@
 # RUNBOOK
 
-How to operate daily-summary. (Status: stub — fill in as the CLI lands.)
+How to operate daily-summary.
 
 ## One-time setup
 

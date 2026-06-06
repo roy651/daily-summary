@@ -1,10 +1,12 @@
-# Handoff — daily-summary (planning seed)
+# Handoff — daily-summary
 
-You are starting a **new, standalone product**. This file is the only context that
-exists yet. Read it fully before planning. The sibling project it borrows from lives at
-`../private/invoicing-assistant` — reference it, do **not** fold into it.
+**The product is built** (Phase 1 complete, feedback loop closed — see `docs/STATUS.md` for the
+zoom-out and `docs/06-build-plan.md` for the current phase). This file is the durable orientation to
+the **shared `mail-evidence` foundation** and why this is its own repo. For how the system works
+day-to-day, read `docs/00-overview.md` → `07` and `docs/RUNBOOK.md`. The sibling it borrows from lives
+at `../private/invoicing-assistant` — reference it, do **not** fold into it.
 
-## Mission (seed — refine in the plan)
+## Mission
 
 A **daily business summary** for Avigail (freelance design studio "ula"): read her daily
 correspondence and produce a short morning digest of *what happened* + *what she likely
@@ -60,24 +62,16 @@ The `RelevanceJudge` / `ContactStore` protocols are the key design point: domain
 the package. daily-summary supplies its *own* judge — "is this thread worth surfacing in
 today's digest" is a different question than "is this billable work."
 
-### First architectural decision for the plan: how to share it
+### How it's shared (decided)
 
-Don't copy/vendor `mail-evidence` — it will drift from the original and you'd maintain
-conditioning logic twice. Pick a real dependency mechanism:
+We use a **local editable install** of the sibling's package
+(`../private/invoicing-assistant/skills/mail-evidence/`, wired in `pyproject.toml`) — the fastest
+mechanism, with extraction to a standalone shared library as the long-term direction (see
+`docs/06`/`STATUS` deferred). Don't copy/vendor it (it would drift). The **portability guard must keep
+passing** — never add a daily-summary import into the package; inject via the `RelevanceJudge` /
+`ContactStore` protocols instead (`relevance.py` / `contacts.py`).
 
-1. **Extract `mail-evidence` into a standalone shared library** (own repo / installable
-   package) that *both* products depend on. Cleanest long-term; a small up-front lift, and
-   it touches invoicing-assistant (move the package, repoint its imports).
-2. **git submodule** of invoicing-assistant (or just its `skills/mail-evidence/`) — fast,
-   no extraction, but couples the two repos' layout.
-3. **Local editable install** (`uv pip install -e ../private/invoicing-assistant/skills/mail-evidence`)
-   — fastest to start planning/prototyping; revisit before the products diverge.
-
-Recommendation: start on (3) to unblock planning, design toward (1). Whatever you choose,
-the **portability guard must keep passing** — never add a daily-summary import into the
-package; inject via the protocols instead.
-
-Same logic applies later to `skills/transcripts/` (the Zoom layer) — also portable, also
+Same logic applies later to `skills/transcripts/` (the Zoom layer, Phase 1.5) — also portable, also
 shared.
 
 ## Reference material in invoicing-assistant (read, don't copy)
@@ -89,16 +83,15 @@ shared.
 - `CLAUDE.md` — note its *shape* (lean always-on context + `docs/` pointers, hard safety
   invariants). Adopt the structure; write your own content.
 
-## Suggested first planning steps (not prescriptive)
+## Where to look now (the build is done)
 
-1. Write this repo's own `CLAUDE.md`: mission, read-only/privacy invariants, repo map.
-2. Open the plan with a **"Shared foundations"** section: adopt `mail-evidence` as the input
-   layer, pick the sharing mechanism above, define the daily-summary `RelevanceJudge` /
-   `ContactStore` implementations.
-3. Then design the daily-summary–specific layer: digest reasoning, to-do projection,
-   daily cadence/scheduling, and how the output is delivered to Avigail.
+- `CLAUDE.md` — lean always-on invariants + repo map (start here every session).
+- `docs/00-overview.md` → `07` — the design docs (state, pipeline, todos, delivery, model seam,
+  build plan, acceptance). `docs/RUNBOOK.md` — how to operate it.
+- `docs/reviews/` — the milestone review history (Reviews 1–5 + fix cycles).
+- `digest/digest_core/` — the code; `digest/tests/` — the suite (180 green).
 
-## Guardrails to carry over
+## Guardrails (still in force)
 
 - **No secrets in the repo.** Credentials via Keychain / git-ignored `.env`; real
   correspondence stays in a git-ignored `fixtures/`-style dir. (Mirror invoicing-assistant's

@@ -1,7 +1,7 @@
 # 01 — State model
 
 Canonical schema for the domain state. Code: `digest/digest_core/state.py`. **Read this before
-touching state.** (Status: stub — fill in alongside the `state.py` implementation task.)
+touching state.**
 
 ## Storage = JSON, one file per entity, under `state/` (git-ignored)
 
@@ -30,11 +30,24 @@ hard failure.
 - **human-confirmed** — Avigail's overrides; written ONLY via the feedback channel, never by the
   deterministic layer (a unit test enforces this).
 
-## Entities (filled in with the implementation)
+## Entities + state files (all under `state/`, git-ignored)
 
-- `ClientProfile` — `state/clients.json`
-- `Project` (+ embedded `Task`, `Blocker`, `Todo`) — `state/projects.json`
+- `ClientProfile` — `clients.json`
+- `Project` (+ embedded `Task`, `Blocker`, `Todo`) — `projects.json`
+- `ContactEntry` `{role, source, reason, added, alias_of}` — `contacts.json` (`DigestContactStore`,
+  `docs/05`). `alias_of` physically links the addresses of one person/entity (the entity-merge
+  correction); `role_of` resolves through it so an alias's role never goes stale.
+- General tacit knowledge (cross-client facts, vendor/name aliases) — `knowledge.json`
+  (`KnowledgeStore`), fed into every reasoning packet.
+- Suppressed thread ids (Avigail flagged off over-surfaced threads) — `suppressed.json`.
 - `observations: [{date, source, note}]` on clients/projects/tasks — soft tacit knowledge + the
-  landing zone for corrections and the future learning store.
+  landing zone for corrections.
+
+## Source-authority rank (provenance)
+
+`state.SOURCE_RANK` orders fact sources low→high: **human** (feedback/manual/bootstrap) > **billing**
+> **model/auto/agent**. Shared by the contact and knowledge stores so a weaker source can neither
+downgrade a role nor remove/replace a stronger-sourced note — an Avigail-confirmed fact is never
+clobbered by a later model pass (corrections detailed in `docs/05`).
 
 `load_*`/`write_*` round-trip exactly (None↔null, stable key order) — pinned by a unit test.
