@@ -167,8 +167,13 @@ aren't pushed by default; "Nothing pushed" in the note confirms it). The diff ra
   (vs subject heuristic) — noted for a later pass.
 - **Process / tags.** `review-3` and `review-4` tags exist locally; pushing remains the owner's gate
   (will `git push --tags` on request).
-- **C-series.** C2 (billing-direction) still the highest-leverage unbuilt fix; C3 partially covered by
-  `kind:entity` (a deterministic new-entity diff remains the more reliable option). Both carried forward.
+- **C-series.** **C2 (billing-direction) — BUILT** (`digest_core/billing.py`): detect invoices/receipts
+  (incl. Hebrew + morning.co/Green-Invoice senders), infer role from direction (inbound→subcontractor
+  set authoritatively; outbound→client only FILLS an unknown role so it never downgrades an agency
+  agent), record relational knowledge, and exempt billing mail from the N2 denoise. Contact precedence
+  is now rank-based (human > billing > model/auto). Found+fixed a real false-positive on live data (a
+  "Re: Invoices" reply / invoicing a SPRIG agent — see commit c11269c). C3 partially covered by
+  `kind:entity`; a deterministic new-entity diff is still the more reliable option (carried forward).
 
 **Net:** H1/H3/H4/H5/H6 fixed (154 tests green); H2 core fixed, its mechanical-override half scheduled.
 Recommend doing the H2 alias/role-override + C2 before the next unattended-`code` milestone.
