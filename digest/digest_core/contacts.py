@@ -88,7 +88,15 @@ class DigestContactStore:
         ):
             return
         self._contacts[key] = ContactEntry(
-            role=role, source=source, reason=reason, added=added
+            role=role,
+            source=source,
+            reason=reason,
+            added=added
+            if added is not None
+            else (existing.added if existing else None),
+            alias_of=existing.alias_of
+            if existing
+            else None,  # never lose an entity merge
         )
 
     def set_role(self, email: str, *, role: str, source: str, reason: str = "") -> None:
@@ -106,7 +114,15 @@ class DigestContactStore:
             existing.source, 0
         ):
             return  # don't downgrade a stronger-sourced role
-        self._contacts[key] = ContactEntry(role=role, source=source, reason=reason)
+        self._contacts[key] = ContactEntry(
+            role=role,
+            source=source,
+            reason=reason,
+            added=existing.added if existing else None,
+            alias_of=existing.alias_of
+            if existing
+            else None,  # never lose an entity merge
+        )
 
     def merge(
         self, emails: list[str], *, role: str | None, source: str, reason: str = ""

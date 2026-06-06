@@ -76,6 +76,25 @@ def test_merge_links_aliases_to_canonical_with_shared_role():
     assert c.entry("idan@rockdesign.co.il").alias_of == "idandamti@ula.co.il"
 
 
+def test_alias_survives_later_promotion_and_set_role():
+    # Regression: a daily run re-promotes contacts via add()/set_role — the entity merge must NOT be lost.
+    c = DigestContactStore()
+    c.merge(
+        ["idandamti@ula.co.il", "idan@rockdesign.co.il"],
+        role="subcontractor",
+        source="model",
+        reason="same person",
+    )
+    c.add(
+        "idan@rockdesign.co.il", role="subcontractor", source="model", reason="promoted"
+    )
+    assert c.entry("idan@rockdesign.co.il").alias_of == "idandamti@ula.co.il"
+    c.set_role(
+        "idan@rockdesign.co.il", role="subcontractor", source="billing", reason="x"
+    )
+    assert c.entry("idan@rockdesign.co.il").alias_of == "idandamti@ula.co.il"
+
+
 def test_apply_corrections_retract_and_merge():
     k = _knowledge(["Rock Design is distinct from Idan Damti"])
     c = DigestContactStore()

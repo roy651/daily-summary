@@ -81,6 +81,7 @@ _MARKETING_DOMAINS = (
     "sendinblue.com",
     "klaviyomail.com",
     "hubspotemail.net",
+    "meydata.co.il",  # recurring community/synagogue events bulletin — noise, not correspondence
 )
 
 

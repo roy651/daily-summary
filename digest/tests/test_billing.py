@@ -77,7 +77,19 @@ def test_outbound_fills_unknown_role_with_client():
     t = _thread(_rec("avigail@ula.co.il", ["new@client.com"], "May Invoice"))
     apply_billing_signals([t], c, k, SELF, run_date="2026-06-06")
     assert c.role_of("new@client.com") == "client"
-    assert any("invoiced by ULA" in n for n in k.general_notes())
+    assert any("ULA invoices new@client.com" in n for n in k.general_notes())
+
+
+def test_outbound_to_known_agent_records_no_fact():
+    # Invoicing a SPRIG agent (Jen) is the AGENCY being billed via her — not a direct-client fact.
+    c = DigestContactStore()
+    c.add("jen@sprigconsulting.com", role="agent", source="model")
+    k = KnowledgeStore()
+    t = _thread(_rec("avigail@ula.co.il", ["jen@sprigconsulting.com"], "May Invoice"))
+    notes = apply_billing_signals([t], c, k, SELF, run_date="2026-06-06")
+    assert notes == []  # no misleading "Jen is invoiced by ULA" note
+    assert c.role_of("jen@sprigconsulting.com") == "agent"  # unchanged
+    assert not any("jen@sprigconsulting.com" in n for n in k.general_notes())
 
 
 def test_outbound_does_not_downgrade_a_known_agent():

@@ -100,16 +100,17 @@ def apply_billing_signals(
             contacts.set_role(
                 email, role="subcontractor", source="billing", reason="invoices ULA"
             )
+            note = f"Billing: {email} invoices ULA -> subcontractor."
+        elif contacts.role_of(email) in (None, "other"):
+            # Outbound to an UNKNOWN contact -> a direct client/payer. (If the recipient is already a
+            # known agent/client, we record NOTHING: an invoice to an agency agent like Jen/Katie is
+            # SPRIG being billed via them, not that the agent is a client — don't assert a false fact.)
+            contacts.set_role(
+                email, role="client", source="billing", reason="invoiced by ULA"
+            )
+            note = f"Billing: ULA invoices {email} -> client."
         else:
-            # Outbound invoice = the recipient is a PAYER, but that's a direct client OR an agency agent
-            # (e.g. SPRIG's Jen/Katie). So only FILL an unknown role — never downgrade a known agent to
-            # client. The knowledge note still records the billing relationship.
-            if contacts.role_of(email) in (None, "other"):
-                contacts.set_role(
-                    email, role="client", source="billing", reason="invoiced by ULA"
-                )
-        verb = "is invoiced by ULA" if role == "client" else "invoices ULA"
-        note = f"Billing direction: {email} {verb}."
+            continue  # known agent/client recipient — agency-mediated billing, no role/fact change
         knowledge.add_general(note, date=run_date, source="billing")
         notes.append(note)
     return notes
