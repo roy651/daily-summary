@@ -359,6 +359,11 @@ def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None) ->
     logging.basicConfig(
         level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stderr
     )
+    # Load ./.env automatically (parsed safely by python-dotenv — never `source` it). Existing shell
+    # env wins (override=False), so `DRY_RUN=false uv run ... daily` still overrides the file.
+    from dotenv import load_dotenv
+
+    load_dotenv()
     env = env if env is not None else os.environ
     args = build_parser().parse_args(argv)
     return args.func(args, env)

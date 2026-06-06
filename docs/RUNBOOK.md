@@ -42,9 +42,11 @@ Avigail, persists state, and advances the watermarks. Two independent safety kno
   to `false` to send for real.
 - **`--dry-run`** (CLI flag): additionally skip **persisting state + advancing the watermark** (pure preview).
 
+The CLI loads `./.env` itself (via python-dotenv) — **do not `source` the `.env`** (it isn't shell
+script; sourcing it can execute stray words). Just run from the repo directory:
+
 ```bash
 cd /path/to/daily-summary
-set -a; source .env; set +a                        # load config (REASONER=code, DELIVERY=email, …)
 
 # 1) Preview — pull + reason + render, nothing sent, nothing persisted:
 uv run python -m digest_core.cli daily --dry-run
@@ -72,8 +74,8 @@ gap-safe and idempotent (threads dedup by Message-ID).
 
 launchd (macOS) — run a small wrapper at 07:00 daily:
 ```bash
-# run-digest.sh
-cd /path/to/daily-summary && set -a && source .env && set +a
+# run-digest.sh   (the CLI loads ./.env itself — no `source` needed)
+cd /path/to/daily-summary || exit 1
 DRY_RUN=false uv run python -m digest_core.cli daily >> state/cron.log 2>&1
 ```
 ```
