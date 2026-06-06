@@ -21,6 +21,7 @@ from digest_core.apply import (
     promote_work_contacts,
     upsert_clients,
 )
+from digest_core.billing import apply_billing_signals
 from digest_core.contacts import DigestContactStore
 from digest_core.delivery import DeliveryResult
 from digest_core.evidence import unify
@@ -135,6 +136,11 @@ def run_digest(
     # Drop suppressed threads entirely — Avigail flagged them off, so the reasoner never sees them.
     if suppressed:
         cleaned = [t for t in cleaned if t.thread_id not in suppressed]
+    # C2: billing direction is the cleanest role signal — set counterparty roles (outbound invoice ->
+    # client, inbound -> subcontractor) before the packet, so the reasoner reasons over correct roles.
+    apply_billing_signals(
+        cleaned, contacts, knowledge, self_addresses, run_date=run_date
+    )
     thread_dates = thread_max_dates(cleaned)
 
     packet = build_reasoning_packet(

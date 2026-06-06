@@ -191,6 +191,8 @@ _REASONER_SYSTEM = (
     "the wrong note, and/or {kind:'merge_contacts', emails:[...], role:'subcontractor', note:'...'} to "
     "declare addresses are one person and set the right role. Reconcile rather than just adding a "
     "contradicting note.\n"
+    "- BILLING = strongest role signal: an invoice/receipt Avigail SENT -> the recipient is a CLIENT; one "
+    "billed TO her -> the sender is a SUBCONTRACTOR/vendor. Contact roles already reflect this; trust them.\n"
     "- ENTITY ROLES (see the packet glossary): someone who INVOICES Avigail or whose output FEEDS her "
     "deliverables is a SUBCONTRACTOR; someone who COORDINATES on the agency side is an AGENT. Neither is "
     "a client — their work belongs as todos (verify_subcontractor / communicate_client) under the real "

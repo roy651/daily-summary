@@ -36,6 +36,24 @@ def test_unresolved_splits_into_sections():
     assert "## Needs your eye" in md and "unplaceable" in md
 
 
+def test_state_review_lists_contacts_by_role():
+    from digest_core.contacts import DigestContactStore
+    from digest_core.render import render_state_review_md
+
+    c = DigestContactStore()
+    c.add(
+        "idan@rockdesign.co.il",
+        role="subcontractor",
+        source="billing",
+        reason="billing",
+    )
+    c.add("jen@sprigconsulting.com", role="agent", source="model")
+    md = render_state_review_md([], [], c)
+    assert "## Contacts & roles" in md
+    assert "### subcontractor" in md and "idan@rockdesign.co.il" in md
+    assert "### agent" in md and "jen@sprigconsulting.com" in md
+
+
 def test_unresolved_kind_defaults_and_validates():
     assert (
         ModelOutput.from_dict({"unresolved": [{"thread_id": "t"}]}).unresolved[0].kind

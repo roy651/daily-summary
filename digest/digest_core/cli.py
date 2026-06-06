@@ -248,10 +248,12 @@ def _cmd_feedback(args, env: Mapping[str, str]) -> int:
 
 
 def _cmd_review(args, env: Mapping[str, str]) -> int:
-    projects, clients, _, _ = _load_state(Path(args.state_dir))
+    projects, clients, contacts, _ = _load_state(Path(args.state_dir))
     out = Path(args.out_dir) / "state-review.md"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(render_state_review_md(clients, projects), encoding="utf-8")
+    out.write_text(
+        render_state_review_md(clients, projects, contacts), encoding="utf-8"
+    )
     log.info("state review -> %s", out)
     return 0
 

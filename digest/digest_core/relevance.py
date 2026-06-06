@@ -103,10 +103,16 @@ def looks_like_marketing(record: EvidenceRecord) -> bool:
 def partition_marketing(threads: list[Thread]) -> tuple[list[Thread], list[Thread]]:
     """Split threads into (kept, dropped). A thread is dropped ONLY if every record looks like
     marketing — mirroring mail-evidence's all-bulk rule, so a single human reply keeps the thread."""
+    from digest_core.billing import looks_like_billing
+
     kept: list[Thread] = []
     dropped: list[Thread] = []
     for t in threads:
-        if t.records and all(looks_like_marketing(r) for r in t.records):
+        # Billing/invoice mail is the cleanest role signal (C2) — never let denoise discard it, even
+        # when it arrives from a no-reply/ESP sender that otherwise looks like marketing.
+        if any(looks_like_billing(r) for r in t.records):
+            kept.append(t)
+        elif t.records and all(looks_like_marketing(r) for r in t.records):
             dropped.append(t)
         else:
             kept.append(t)

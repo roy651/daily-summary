@@ -14,7 +14,16 @@ from email.utils import parseaddr
 from pathlib import Path
 
 CONTACT_ROLES = frozenset({"client", "agent", "subcontractor", "end_client", "other"})
-_HUMAN_SOURCES = frozenset({"bootstrap", "manual", "feedback"})
+# Authority of a role's source, low→high. A correction may not DOWNGRADE to a weaker source:
+# human (feedback/manual/bootstrap) > billing-direction > model/auto inference.
+_SOURCE_RANK = {
+    "auto": 0,
+    "model": 0,
+    "billing": 1,
+    "bootstrap": 2,
+    "manual": 2,
+    "feedback": 2,
+}
 
 
 def _norm_email(raw: str) -> str:
@@ -80,21 +89,20 @@ class DigestContactStore:
         )
 
     def set_role(self, email: str, *, role: str, source: str, reason: str = "") -> None:
-        """Correction primitive: force a role (bypasses the sticky-first-role guard). A model-sourced
-        correction still must NOT override a human-set role; a human correction (feedback) overrides
-        anything. Used to reconcile a mis-identified entity (e.g. alias idan@rockdesign -> subcontractor)."""
+        """Correction primitive: force a role (bypasses the sticky-first-role guard), subject to source
+        authority — a weaker source may not override a stronger one (human > billing > model/auto). So a
+        model correction can't clobber a human-confirmed role or a billing-direction fact, but a human
+        correction overrides anything. Used to reconcile a mis-identified entity / set a billing role."""
         if role not in CONTACT_ROLES:
             raise ValueError(
                 f"invalid contact role: {role!r} (allowed: {sorted(CONTACT_ROLES)})"
             )
         key = _norm_email(email)
         existing = self._contacts.get(key)
-        if (
-            existing
-            and existing.source in _HUMAN_SOURCES
-            and source not in _HUMAN_SOURCES
+        if existing and _SOURCE_RANK.get(source, 0) < _SOURCE_RANK.get(
+            existing.source, 0
         ):
-            return  # never let a model correction clobber a human-confirmed role
+            return  # don't downgrade a stronger-sourced role
         self._contacts[key] = ContactEntry(role=role, source=source, reason=reason)
 
     def entry(self, email: str) -> ContactEntry | None:

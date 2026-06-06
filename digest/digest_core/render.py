@@ -204,12 +204,13 @@ def _feedback_template() -> list[str]:
 
 
 def render_state_review_md(
-    clients: list[ClientProfile], projects: list[Project]
+    clients: list[ClientProfile], projects: list[Project], contacts=None
 ) -> str:
     """A human-readable snapshot of what the system believes, for Avigail to eyeball + correct.
 
-    Surfaces the accumulated client/project map (with confidence + soft observations) so she can
-    catch a misread. Corrections are made by hand-editing state/*.json (v1) or via feedback (phase 2).
+    Surfaces the accumulated client/project/contact map (with confidence + soft observations) so she
+    can catch a misread (esp. a wrong contact role). Corrections via the feedback channel
+    (`# alias:` / `# forget:` / notes) or by hand-editing state/*.json.
     """
     lines: list[str] = ["# State review — what the system currently believes", ""]
     lines.append(
@@ -247,5 +248,21 @@ def render_state_review_md(
             lines.append(f"  - {p.status_reason}")
         for o in p.observations:
             lines.append(f"  - _{o.date}_: {o.note}")
+    lines.append("")
+
+    # Contacts & roles — the entity map. Grouped by role so a mis-classified sub/agent/client is easy
+    # to spot; fix with `# alias: a@x, b@y = subcontractor` or by hand-editing state/contacts.json.
+    items = contacts.items() if contacts is not None else []
+    lines.append("## Contacts & roles")
+    if not items:
+        lines.append("_None._")
+    else:
+        by_role: dict[str, list[str]] = {}
+        for email, entry in items:
+            line = f"- {email}" + (f" — _{entry.reason}_" if entry.reason else "")
+            by_role.setdefault(entry.role, []).append(line)
+        for role in sorted(by_role):
+            lines.append(f"### {role}")
+            lines.extend(by_role[role])
     lines.append("")
     return "\n".join(lines).rstrip() + "\n"
