@@ -168,7 +168,9 @@ def render_digest_md(
     if personal:
         lines.append("## 👤 Personal")
         for u in personal:
-            lines.append(f"- {u.why}")
+            # Strip a redundant leading "Personal:" the model sometimes adds — the section says it already.
+            why = re.sub(r"^\s*personal\s*[:\-—]\s*", "", u.why, flags=re.IGNORECASE)
+            lines.append(f"- {why}")
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"

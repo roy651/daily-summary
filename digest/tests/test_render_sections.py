@@ -75,6 +75,22 @@ def test_digest_sections_reordered_and_folded():
     assert "TAU interview" in md
 
 
+def test_personal_strips_redundant_prefix():
+    out = ModelOutput.from_dict(
+        {
+            "unresolved": [
+                {
+                    "thread_id": "t",
+                    "why": "Personal: dentist Thu 9am",
+                    "kind": "personal",
+                }
+            ]
+        }
+    )
+    md = render_digest_md(out, [], run_date="2026-06-07")
+    assert "- dentist Thu 9am" in md and "Personal: dentist" not in md
+
+
 def test_projectless_update_attaches_to_closest_project():
     """Double-down on the client+project prefix: an update the model left project-less is matched to its
     closest project by headline tokens, so it gets a real mini-header instead of a bare 'General'."""
