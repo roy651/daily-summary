@@ -100,16 +100,17 @@ def render_digest_md(
             lines.append(f"- **{u.headline}**{detail}")
     # Fold the smaller "needs a glance" items into Updates instead of their own clutter of sections:
     # unplaced threads, entity/role confirmations, non-spam leads, and decay guesses. Personal stays below.
+    # No thread ids here — they're raw Message-IDs (ugly noise for Avigail); the why text is enough.
     also: list[str] = []
     for u in output.unresolved:
         if u.kind == "personal":
             continue
         if u.kind == "lead":
-            also.append(f"- 🌱 possible lead — {u.why}  (`{u.thread_id}`)")
+            also.append(f"- 🌱 possible lead — {u.why}")
         elif u.kind == "entity":
-            also.append(f"- 🤝 {u.why}  (`{u.thread_id}`)")
+            also.append(f"- 🤝 {u.why}")
         else:
-            also.append(f"- 👀 {u.why}  (`{u.thread_id}`)")
+            also.append(f"- 👀 {u.why}")
     for s in suspected or []:
         if s.kind == "dormant_project":
             also.append(f"- 💤 {s.title} — gone quiet; still active?  ({s.detail})")
@@ -167,7 +168,7 @@ def render_digest_md(
     if personal:
         lines.append("## 👤 Personal")
         for u in personal:
-            lines.append(f"- {u.why}  (`{u.thread_id}`)")
+            lines.append(f"- {u.why}")
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"

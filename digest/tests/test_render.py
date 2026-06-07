@@ -82,7 +82,9 @@ def test_digest_has_three_sections_and_unresolved():
     # content surfaces
     assert "Website redesign" in md
     assert "Client delayed copy" in md
-    assert "t-9" in md
+    assert (
+        "possibly a new lead" in md
+    )  # the unplaced thread folds into "Also worth a look" (no raw id)
 
 
 def test_digest_todos_ranked_urgent_first():
