@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  FALLBACK ONLY: run the morning digest from this Mac at 07:00 Israel (Sun–Fri) if the mini-pc can't be
+  used. The Mac is already on Asia/Jerusalem, so 07:00 here = 07:00 Israel; launchd runs a missed job on
+  next wake if the Mac was asleep. Prefer the mini-pc (deploy/DEPLOY.md); don't run both (state diverges).
+
+  Enable:   cp deploy/mac-fallback.plist ~/Library/LaunchAgents/com.ula.daily-summary.plist
+            launchctl load ~/Library/LaunchAgents/com.ula.daily-summary.plist
+  Disable:  launchctl unload ~/Library/LaunchAgents/com.ula.daily-summary.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ula.daily-summary</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/uv</string><string>run</string><string>python</string>
+    <string>-m</string><string>digest_core.cli</string><string>daily</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/royabitbol/Development/daily-summary</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+  <key>StandardOutPath</key><string>/Users/royabitbol/Development/daily-summary/state/launchd.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/royabitbol/Development/daily-summary/state/launchd.err.log</string>
+</dict>
+</plist>
