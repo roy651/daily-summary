@@ -16,10 +16,19 @@ confident of the grouping, else hangs directly off the Project.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+
+def _content_id(text: str) -> str:
+    """Deterministic short id from normalized text. Same text -> same id, so a re-derived todo/note
+    matches its tombstone (a human-closed todo stays closed even when the model re-proposes it)."""
+    norm = " ".join((text or "").lower().split())
+    return hashlib.sha1(norm.encode("utf-8")).hexdigest()[:12]
+
 
 # ── controlled vocabularies ─────────────────────────────────────────────────────
 # Extensible-but-checked: unknown values are rejected at construction so a typo in model output or
@@ -87,10 +96,24 @@ class Observation:
     date: str
     source: str  # "email" | "transcript" | "manual" | "feedback" | ...
     note: str
+    id: str | None = None
+    dismissed: bool = (
+        False  # human tombstone: a dismissed note stays hidden and isn't re-added
+    )
+
+    def __post_init__(self) -> None:
+        if self.id is None:
+            self.id = _content_id(self.note)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Observation:
-        return cls(date=d["date"], source=d["source"], note=d["note"])
+        return cls(
+            date=d["date"],
+            source=d["source"],
+            note=d["note"],
+            id=d.get("id"),
+            dismissed=d.get("dismissed", False),
+        )
 
 
 @dataclass
@@ -136,9 +159,16 @@ class Todo:
     due_hint: str | None
     rationale: str
     source_thread_id: str | None
+    id: str | None = None
+    source: str = "model"  # "model" | "human" (a human todo persists, never clobbered by carry-forward)
+    done: bool = (
+        False  # human tombstone: closed; kept so re-derivation can't resurrect it
+    )
 
     def __post_init__(self) -> None:
         _check(self.category, TODO_CATEGORIES, "todo category")
+        if self.id is None:
+            self.id = _content_id(self.text)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Todo:
@@ -149,6 +179,9 @@ class Todo:
             due_hint=d.get("due_hint"),
             rationale=d.get("rationale", ""),
             source_thread_id=d.get("source_thread_id"),
+            id=d.get("id"),
+            source=d.get("source", "model"),
+            done=d.get("done", False),
         )
 
 

@@ -29,10 +29,16 @@ def merge_todos(prior: list[Todo], proposed: list[Todo]) -> list[Todo]:
     Match is by normalized text. A prior todo whose text matches a proposed one is considered
     addressed (the proposed version replaces it). Anything else from `prior` is retained so an
     unaddressed action never silently vanishes between runs.
+
+    Tombstones (human-confirmed) override that: a prior todo Avigail **closed** (`done`) or **authored**
+    (`source="human"`) is protected — a model proposal with the same text is dropped (it can't resurrect
+    a closed todo, nor overwrite her wording). Both are still carried forward.
     """
-    proposed_keys = {_norm_text(t.text) for t in proposed}
+    protected = {_norm_text(t.text) for t in prior if t.done or t.source == "human"}
+    kept = [t for t in proposed if _norm_text(t.text) not in protected]
+    proposed_keys = {_norm_text(t.text) for t in kept}
     carried = [t for t in prior if _norm_text(t.text) not in proposed_keys]
-    return list(proposed) + carried
+    return kept + carried
 
 
 # ── prioritization ──────────────────────────────────────────────────────────────
@@ -109,6 +115,8 @@ def prioritize(projects: list[Project], *, run_date: str) -> list[RankedTodo]:
             continue
         # Project-level todos use the project's own deadline.
         for todo in p.open_todos:
+            if todo.done:  # human tombstone — closed; never rank/surface it
+                continue
             deadline = todo.due_hint or p.deadline
             score, hard_soon = _score(
                 todo,
@@ -132,6 +140,8 @@ def prioritize(projects: list[Project], *, run_date: str) -> list[RankedTodo]:
         # model's *soft* guess, so it uses the project's deadline_kind — never silently "hard" (F4).
         for task in p.tasks:
             for todo in task.open_todos:
+                if todo.done:  # human tombstone — closed; never rank/surface it
+                    continue
                 deadline = todo.due_hint or task.deadline or p.deadline
                 score, hard_soon = _score(
                     todo,
