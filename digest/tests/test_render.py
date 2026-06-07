@@ -74,10 +74,11 @@ def test_digest_has_three_sections_and_unresolved():
         _output(), _projects(), run_date="2026-06-05", run_date_label="2026-06-05"
     )
     assert "# Daily digest" in md
-    assert "## Project status" in md
-    assert "## Important updates" in md
-    assert "## TODO" in md
-    assert "## Needs your eye" in md
+    assert "## 📬 Email updates" in md
+    assert "## ✅ Todos" in md
+    assert "## 🗂 Project status" in md
+    # an unplaced thread folds into "Also worth a look" under Updates (no standalone section)
+    assert "**Also worth a look**" in md
     # content surfaces
     assert "Website redesign" in md
     assert "Client delayed copy" in md

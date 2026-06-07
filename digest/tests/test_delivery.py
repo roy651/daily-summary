@@ -60,6 +60,24 @@ def test_email_delivery_dry_run_does_not_send(tmp_path):
     assert "avigail@ula.example" in result.detail
 
 
+def test_digest_md_renders_to_html_for_mac_mail():
+    from digest_core.delivery import _md_to_html
+
+    html = _md_to_html(
+        "## 📬 Email updates\n#### sprig — logo\n- **Assets received** — from Katie\n"
+    )
+    assert (
+        "<html>" in html and "<style>" in html
+    )  # self-contained doc Mac Mail can render
+    assert "<h2" in html and "<h4" in html and "<li>" in html
+    assert "<strong>Assets received</strong>" in html
+    # the email's feedback hint is plain prose — no stray heading (that's why email drops the editable
+    # todos template, whose `# archive:` lines would render as <h1>s)
+    from digest_core.delivery import _FEEDBACK_HINT
+
+    assert "<h1" not in _md_to_html(_FEEDBACK_HINT)
+
+
 def test_select_delivery_defaults_to_file(tmp_path):
     d = select_delivery({}, out_dir=tmp_path)
     assert isinstance(d, FileDelivery)

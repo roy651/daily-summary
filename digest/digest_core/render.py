@@ -6,6 +6,8 @@ file is the human-editable surface that FileDelivery reads back as feedback.
 
 from __future__ import annotations
 
+import re
+
 from digest_core.schema import ModelOutput
 from digest_core.state import ClientProfile, Project
 from digest_core.todos import BANDS, RankedTodo, prioritize
@@ -13,16 +15,21 @@ from digest_core.todos import BANDS, RankedTodo, prioritize
 # Lifecycle statuses shown in the digest, in display order. Archived projects are hidden.
 _STATUS_ORDER = ["blocked", "on_hold", "active", "done"]
 _BAND_LABEL = {"urgent": "Urgent", "soon": "Soon", "whenever": "Whenever"}
-_IMPORTANCE_LABEL = {"high": "High", "med": "Medium", "low": "Low"}
+_IMP_RANK = {"high": 0, "med": 1, "low": 2}
+
+# Common words skipped when matching a project-less update to its closest project, so the overlap
+# reflects distinctive terms (client/project names), not filler.
+_STOPWORDS = frozenset(
+    "the for and with from into new a an of to on re fwd update client project".split()
+)
 
 
 def _client_label(client_id: str, end_client: str | None) -> str:
     return f"{client_id} / {end_client}" if end_client else client_id
 
 
-def _ranked_line(r: RankedTodo) -> str:
-    target = f" → {r.todo.target}" if r.todo.target else ""
-    return f"- [{r.todo.category}] {r.todo.text}{target}  ({_client_label(r.client_id, r.end_client)})"
+def _tokens(s: str) -> set[str]:
+    return {t for t in re.findall(r"[a-z0-9]{3,}", s.lower()) if t not in _STOPWORDS}
 
 
 def render_digest_md(
@@ -34,9 +41,34 @@ def render_digest_md(
     filtered: list | None = None,
     suspected: list | None = None,
 ) -> str:
+    by_id = {p.project_id: p for p in projects}
+    proj_tokens = {
+        p.project_id: _tokens(f"{p.client_id} {p.end_client or ''} {p.title}")
+        for p in projects
+    }
+
+    def _label_of(p: Project) -> str:
+        return f"{_client_label(p.client_id, p.end_client)} — {p.title}"
+
+    def _plabel(pid: str | None) -> str | None:
+        """Client+project label for a project id ("sprig — RhythMedix logo"), or None if unknown."""
+        p = by_id.get(pid) if pid else None
+        return _label_of(p) if p else None
+
+    def _closest_label(*text: str) -> str | None:
+        """Best-effort client+project prefix for an update the model left project-less: match its text
+        to the project with the most distinctive-token overlap (≥2). Avoids a bare 'General' bucket."""
+        toks = _tokens(" ".join(text))
+        best, score = None, 1  # require at least 2 shared tokens to claim a match
+        for p in projects:
+            s = len(toks & proj_tokens[p.project_id])
+            if s > score:
+                best, score = p, s
+        return _label_of(best) if best else None
+
     ranked = prioritize(projects, run_date=run_date)
-    # Todos suspected done/stale move OUT of the active list into "confirm to clear" — so the main
-    # TODO list shows only genuinely-active work, not months of likely-completed carry-forward.
+    # Todos suspected done/stale are pulled OUT of the active list (they fold into Updates below as
+    # "likely done"), so the Todos section shows only genuinely-active work — not months of carry-forward.
     suspected_todo_keys = {
         (s.project_id, s.title)
         for s in (suspected or [])
@@ -47,12 +79,68 @@ def render_digest_md(
     ]
     lines: list[str] = [f"# Daily digest — {run_date_label or run_date}", ""]
 
-    # 1. Project status — only genuinely-active work. Done/archived drop off; suspected-dormant move to
-    # the "confirm to clear" section below (so the status list isn't padded with quiet/finished work).
+    # ── 1. Email updates (Avigail's primary section) — grouped under client+project mini-headers ──
+    lines.append("## 📬 Email updates")
+    grouped: dict[str, list] = {}
+    order: list[str] = []
+    for u in sorted(
+        output.digest_updates, key=lambda u: _IMP_RANK.get(u.importance, 1)
+    ):
+        key = _plabel(u.project_id) or _closest_label(u.headline, u.detail) or "General"
+        if key not in grouped:
+            grouped[key] = []
+            order.append(key)
+        grouped[key].append(u)
+    if not order:
+        lines.append("_No notable updates._")
+    for key in order:
+        lines.append(f"#### {key}")
+        for u in grouped[key]:
+            detail = f" — {u.detail}" if u.detail else ""
+            lines.append(f"- **{u.headline}**{detail}")
+    # Fold the smaller "needs a glance" items into Updates instead of their own clutter of sections:
+    # unplaced threads, entity/role confirmations, non-spam leads, and decay guesses. Personal stays below.
+    also: list[str] = []
+    for u in output.unresolved:
+        if u.kind == "personal":
+            continue
+        if u.kind == "lead":
+            also.append(f"- 🌱 possible lead — {u.why}  (`{u.thread_id}`)")
+        elif u.kind == "entity":
+            also.append(f"- 🤝 {u.why}  (`{u.thread_id}`)")
+        else:
+            also.append(f"- 👀 {u.why}  (`{u.thread_id}`)")
+    for s in suspected or []:
+        if s.kind == "dormant_project":
+            also.append(f"- 💤 {s.title} — gone quiet; still active?  ({s.detail})")
+        else:
+            also.append(f"- ☑️ {s.title} — likely done  ({s.detail})")
+    if also:
+        lines.append("")
+        lines.append("**Also worth a look**")
+        lines.extend(also)
+    lines.append("")
+
+    # ── 2. Todos — by urgency band, each line led by the client+project it belongs to ──
+    lines.append("## ✅ Todos")
+    if not ranked:
+        lines.append("_Nothing queued._")
+    for band in BANDS:
+        group = [r for r in ranked if r.band == band]
+        if not group:
+            continue
+        lines.append(f"### {_BAND_LABEL[band]}")
+        for r in group:
+            label = _plabel(r.project_id) or _client_label(r.client_id, r.end_client)
+            target = f" → {r.todo.target}" if r.todo.target else ""
+            lines.append(f"- **{label}** · [{r.todo.category}] {r.todo.text}{target}")
+    lines.append("")
+
+    # ── 3. Project status (last) — only genuinely-active work; done/archived/dormant drop off ──
     dormant_ids = {
         s.project_id for s in (suspected or []) if s.kind == "dormant_project"
     }
-    lines.append("## Project status")
+    lines.append("## 🗂 Project status")
     visible = [
         p
         for p in projects
@@ -70,89 +158,16 @@ def render_digest_md(
         reason = f": {p.status_reason}" if p.status_reason else ""
         conf = f" _(confidence: {p.confidence})_" if p.confidence else ""
         lines.append(
-            f"- **{p.title}** ({_client_label(p.client_id, p.end_client)}) — {p.status}{reason}{conf}"
+            f"- **{_client_label(p.client_id, p.end_client)} — {p.title}** — {p.status}{reason}{conf}"
         )
     lines.append("")
 
-    # 2. Important updates (last ~24h)
-    lines.append("## Important updates (last 24h)")
-    if not output.digest_updates:
-        lines.append("_No notable updates._")
-    for importance in ("high", "med", "low"):
-        group = [u for u in output.digest_updates if u.importance == importance]
-        if not group:
-            continue
-        lines.append(f"### {_IMPORTANCE_LABEL[importance]}")
-        for u in group:
-            detail = f" — {u.detail}" if u.detail else ""
-            lines.append(f"- **{u.headline}**{detail}")
-    lines.append("")
-
-    # 3. Prioritized TODO list
-    lines.append("## TODO — next day or two")
-    if not ranked:
-        lines.append("_Nothing queued._")
-    for band in BANDS:
-        group = [r for r in ranked if r.band == band]
-        if not group:
-            continue
-        lines.append(f"### {_BAND_LABEL[band]}")
-        lines.extend(_ranked_line(r) for r in group)
-    lines.append("")
-
-    # 4. Unresolved threads, surfaced (never dropped) and split by kind so personal mail and entity
-    #    questions don't hide among unplaced business threads. 'unplaced' is the catch-all.
-    for kind, title in (
-        ("personal", "Personal"),
-        ("lead", "Possible new leads"),
-        ("entity", "New people / roles — confirm"),
-        ("unplaced", "Needs your eye"),
-    ):
-        group = [
-            u
-            for u in output.unresolved
-            if u.kind == kind
-            or (kind == "unplaced" and u.kind not in ("personal", "lead", "entity"))
-        ]
-        if not group:
-            continue
-        lines.append(f"## {title}")
-        for u in group:
-            lines.append(f"- thread `{u.thread_id}`: {u.why}")
-        lines.append("")
-
-    # 5. Suspected done / dormant — decay guesses surfaced for confirmation; NEVER auto-cleared.
-    if suspected:
-        lines.append("## Suspected done / dormant — confirm to clear")
-        dormant = [s for s in suspected if s.kind == "dormant_project"]
-        todos_s = [s for s in suspected if s.kind != "dormant_project"]
-        if dormant:
-            lines.append("_Projects gone quiet — still active?_")
-            for s in dormant:
-                lines.append(f"- **{s.title}** (`{s.project_id}`) — {s.detail}")
-        if todos_s:
-            lines.append("_TODOs likely already done — clear them?_")
-            for s in todos_s[:12]:
-                lines.append(f"- {s.title}  _({s.detail})_")
-            if len(todos_s) > 12:
-                lines.append(f"- _(+{len(todos_s) - 12} more)_")
-        lines.append("")
-
-    # 6. Filtered as bulk/marketing — surfaced (capped) so a misfire is visible, not silently dropped.
-    if filtered:
-        lines.append(
-            f"## Filtered as bulk/marketing ({len(filtered)}) — flag any that matter"
-        )
-        for t in filtered[:8]:
-            subj = (
-                (t.records[0].subject or "(no subject)").strip()
-                if t.records
-                else "(empty)"
-            )
-            sender = (t.records[0].from_ or "?") if t.records else "?"
-            lines.append(f"- {subj}  — _{sender}_")
-        if len(filtered) > 8:
-            lines.append(f"- _(+{len(filtered) - 8} more)_")
+    # ── 4. Personal (bottom) — her non-business mail, surfaced but out of the way ──
+    personal = [u for u in output.unresolved if u.kind == "personal"]
+    if personal:
+        lines.append("## 👤 Personal")
+        for u in personal:
+            lines.append(f"- {u.why}  (`{u.thread_id}`)")
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"

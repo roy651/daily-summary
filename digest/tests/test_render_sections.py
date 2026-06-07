@@ -8,12 +8,24 @@ from digest_core.render import render_digest_md, render_todos_md
 from digest_core.schema import ModelOutput
 
 
-def test_unresolved_splits_into_sections():
+def test_digest_sections_reordered_and_folded():
+    """Avigail's reshape: Updates → Todos → Status → Personal; needs-eye / entity / leads / suspected
+    fold into Updates; bulk-marketing and the standalone unresolved boxes are gone."""
+    from types import SimpleNamespace
+
+    from digest_core.state import Project
+
+    projects = [Project(project_id="rhythmedix-logo", client_id="sprig", title="logo")]
     out = ModelOutput.from_dict(
         {
-            "project_updates": [],
-            "digest_updates": [],
-            "insights": [],
+            "digest_updates": [
+                {
+                    "project_id": "rhythmedix-logo",
+                    "headline": "Assets received",
+                    "detail": "from Katie",
+                    "importance": "high",
+                }
+            ],
             "unresolved": [
                 {"thread_id": "t1", "why": "TAU interview invite", "kind": "personal"},
                 {"thread_id": "t2", "why": "Clutch cold lead", "kind": "lead"},
@@ -22,18 +34,74 @@ def test_unresolved_splits_into_sections():
                     "why": "treating idan@rockdesign.co.il as a sub — confirm?",
                     "kind": "entity",
                 },
-                {
-                    "thread_id": "t4",
-                    "why": "unplaceable business thread",
-                },  # default kind
+                {"thread_id": "t4", "why": "unplaceable business thread"},
             ],
         }
     )
-    md = render_digest_md(out, [], run_date="2026-06-06")
-    assert "## Personal" in md and "TAU interview" in md
-    assert "## Possible new leads" in md
-    assert "## New people / roles — confirm" in md and "idan@rockdesign.co.il" in md
-    assert "## Needs your eye" in md and "unplaceable" in md
+    suspected = [
+        SimpleNamespace(
+            kind="stale_todo",
+            project_id="rhythmedix-logo",
+            title="chase printer",
+            detail="90d quiet",
+        )
+    ]
+    md = render_digest_md(out, projects, run_date="2026-06-06", suspected=suspected)
+
+    # 1) order: Email updates → Todos → Project status → Personal
+    assert (
+        md.index("## 📬 Email updates")
+        < md.index("## ✅ Todos")
+        < md.index("## 🗂 Project status")
+        < md.index("## 👤 Personal")
+    )
+    # 2) each update line sits under a client+project mini-header
+    assert "#### sprig — logo" in md and "Assets received" in md
+    # 3) needs-eye / entity / non-spam lead / suspected-done all fold into Updates
+    assert "**Also worth a look**" in md
+    assert "unplaceable" in md and "idan@rockdesign.co.il" in md
+    assert "possible lead" in md and "Clutch cold lead" in md
+    assert "chase printer" in md and "likely done" in md
+    # 4) the old standalone sections are gone
+    for gone in (
+        "## Possible new leads",
+        "## New people / roles — confirm",
+        "## Needs your eye",
+        "## Suspected done",
+        "Filtered as bulk/marketing",
+    ):
+        assert gone not in md
+    # 5) personal mail stays, at the bottom
+    assert "TAU interview" in md
+
+
+def test_projectless_update_attaches_to_closest_project():
+    """Double-down on the client+project prefix: an update the model left project-less is matched to its
+    closest project by headline tokens, so it gets a real mini-header instead of a bare 'General'."""
+    from digest_core.state import Project
+
+    projects = [
+        Project(
+            project_id="rhythmedix-logo",
+            client_id="sprig",
+            end_client="rhythmedix",
+            title="RhythMedix logo rebrand",
+        ),
+        Project(project_id="ivory-brand", client_id="ivory", title="Brand refresh"),
+    ]
+    out = ModelOutput.from_dict(
+        {
+            "digest_updates": [
+                {
+                    "headline": "Dana posted 3 logo variations for the RhythMedix rebrand",
+                    "importance": "med",
+                }  # no project_id
+            ]
+        }
+    )
+    md = render_digest_md(out, projects, run_date="2026-06-07")
+    assert "#### sprig / rhythmedix — RhythMedix logo rebrand" in md
+    assert "General" not in md
 
 
 def test_state_review_lists_contacts_by_role():

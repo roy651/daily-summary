@@ -21,6 +21,38 @@ class DeliveryResult:
     detail: str
 
 
+# Appended to the emailed digest: a one-line nudge on how to reply with feedback (the email reply is
+# her correction channel until the phase-2 web page). Kept short so it doesn't re-bloat the digest.
+_FEEDBACK_HINT = (
+    "\n\n---\n\n_Reply to this email to update me — e.g. `done: <todo>`, "
+    "`archive: <project>`, `suppress: <thread>`, or just tell me in plain words._\n"
+)
+
+_EMAIL_CSS = (
+    "body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;"
+    "font-size:14px;line-height:1.5;color:#222;max-width:720px;margin:0 auto;padding:8px}"
+    "h1{font-size:20px;margin:0 0 12px}"
+    "h2{font-size:17px;border-bottom:1px solid #eee;padding-bottom:3px;margin:22px 0 8px}"
+    "h3{font-size:13px;color:#777;text-transform:uppercase;letter-spacing:.04em;margin:14px 0 4px}"
+    "h4{font-size:14px;color:#1a7a4c;margin:12px 0 4px}"
+    "ul{margin:4px 0 10px;padding-left:20px}li{margin:3px 0}"
+    "code{background:#f4f4f4;padding:1px 4px;border-radius:3px;font-size:13px}"
+    "hr{border:0;border-top:1px solid #eee;margin:18px 0}"
+)
+
+
+def _md_to_html(body_md: str) -> str:
+    """Render the digest markdown to a self-contained HTML document so it displays in Mac Mail (which
+    otherwise shows the raw markdown)."""
+    import markdown
+
+    html = markdown.markdown(body_md, extensions=["extra", "sane_lists"])
+    return (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+        f"<style>{_EMAIL_CSS}</style></head><body>{html}</body></html>"
+    )
+
+
 class FileDelivery:
     """The no-send backend: the pipeline already wrote the digest + editable todos to out/, so delivery
     is a no-op here. Reads the edited todos back as feedback on the next run."""
@@ -89,10 +121,13 @@ class EmailDelivery:
                 detail=f"dry-run: would send to {recipient}: {subject}",
             )
 
-        self._send_smtp(recipient, subject, digest_md + "\n\n---\n\n" + todos_md)
+        # Email is for READING — send the digest itself (it already has the Todos section) plus a short
+        # reply-feedback hint, NOT the editable todos file (its `# archive:` template would render as
+        # giant H1s in HTML, and it's redundant here). The file backend keeps the editable todos.md.
+        self._send_smtp(recipient, subject, digest_md + _FEEDBACK_HINT)
         return DeliveryResult(backend="email", sent=True, detail=f"sent to {recipient}")
 
-    def _send_smtp(self, recipient: str, subject: str, body: str) -> None:
+    def _send_smtp(self, recipient: str, subject: str, body_md: str) -> None:
         import smtplib
         from email.message import EmailMessage
 
@@ -100,7 +135,10 @@ class EmailDelivery:
         msg["From"] = self.user
         msg["To"] = recipient
         msg["Subject"] = subject
-        msg.set_content(body)
+        msg.set_content(body_md)  # plain-text fallback (the markdown source)
+        msg.add_alternative(
+            _md_to_html(body_md), subtype="html"
+        )  # what Mac Mail renders
         # Timeout so a scheduled/unattended run can't hang forever on a stuck SMTP connection (F9).
         with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=30) as smtp:
             smtp.login(self.user, self.password)
