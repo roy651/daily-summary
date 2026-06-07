@@ -1,5 +1,7 @@
 # 08 — Dashboard (Phase 2)
 
+> **Status (2026-06-08):** v1 (2a+2b) BUILT + tested (`digest_web/`, 194 green) — read-only tabs + tombstone actions. Pending deploy to the mini-pc (it was unreachable at build time). Deploy kit in `deploy/`.
+
 A local-network web dashboard for Avigail: view the same morning digest in a browser and **interact**
 with it (close/add/edit todos, change a project's status, add/dismiss project notes, fix contact
 roles, retract a wrong fact). Code: `digest_web/` (new package; imports `digest_core`, never imported
