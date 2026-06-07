@@ -24,8 +24,14 @@
 <div class="card" id="todo-{{ t.id }}"><div class="row">
   <div>{{ t.text }}{% if t.target %}<span class="muted"> → {{ t.target }}</span>{% endif %}
     {% if t.source=='human' %}<span class="tag">yours</span>{% endif %}</div>
-  <form class="inline" hx-post="/actions/todo/{{ p.project_id }}/{{ t.id }}/done"
-        hx-target="#todo-{{ t.id }}" hx-swap="outerHTML"><button>✓ done</button></form>
+  <span style="white-space:nowrap">
+    <form class="inline" hx-post="/actions/todo/{{ p.project_id }}/{{ t.id }}/done"><button title="done">✓</button></form>
+    <details class="inline"><summary style="cursor:pointer;list-style:none;display:inline">✎</summary>
+      <form class="inline" hx-post="/actions/todo/{{ p.project_id }}/{{ t.id }}/edit">
+        <input name="text" value="{{ t.text }}" style="width:200px;padding:4px"><button>save</button></form>
+    </details>
+    <form class="inline" hx-post="/actions/todo/{{ p.project_id }}/{{ t.id }}/delete" hx-confirm="Delete this todo?"><button title="delete">🗑</button></form>
+  </span>
 </div></div>
 {% endfor %}
 <form class="card" hx-post="/actions/project/{{ p.project_id }}/todo" hx-target="this" hx-swap="none">

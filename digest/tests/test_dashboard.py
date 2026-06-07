@@ -76,6 +76,32 @@ def test_status_change_writes_human_confirmed(ctx):
     assert p.status_confirmed == "on_hold" and p.status == "on_hold"
 
 
+def test_edit_todo_updates_text_and_marks_human(ctx):
+    client, state, tid, _ = ctx
+    client.post(f"/actions/todo/p1/{tid}/edit", data={"text": "do it better"})
+    p = load_projects(state / "projects.json")[0]
+    t = p.open_todos[0]
+    assert t.text == "do it better" and t.source == "human"
+    from digest_core.state import _content_id
+
+    assert t.id == _content_id("do it better")  # id follows the text
+
+
+def test_delete_model_todo_tombstones_human_todo_removed(ctx):
+    client, state, tid, _ = ctx
+    # model todo -> tombstone (kept, done=True) so the cron can't resurrect it
+    client.post(f"/actions/todo/p1/{tid}/delete")
+    p = load_projects(state / "projects.json")[0]
+    assert len(p.open_todos) == 1 and p.open_todos[0].done is True
+    # add a human todo, then delete it -> truly removed
+    client.post("/actions/todo/add", data={"project_id": "p1", "text": "mine"})
+    p = load_projects(state / "projects.json")[0]
+    hid = next(t.id for t in p.open_todos if t.text == "mine")
+    client.post(f"/actions/todo/p1/{hid}/delete")
+    p = load_projects(state / "projects.json")[0]
+    assert not any(t.text == "mine" for t in p.open_todos)
+
+
 def test_dismiss_note_and_add_human_todo_and_note(ctx):
     client, state, _, oid = ctx
     client.post(f"/actions/project/p1/note/{oid}/dismiss")

@@ -1,6 +1,7 @@
 """Tombstone-writing actions for the dashboard (docs/08). Every write here is a HUMAN-CONFIRMED change
 to the single shared state model — a flag, not a hard delete — so the cron re-deriving from evidence
-can't resurrect it. Never writes agent/observed fields."""
+can't resurrect it. Never writes agent/observed fields. Mutations return an HX-Refresh so the page
+reloads to the new state (simple + robust for a single-user dashboard)."""
 
 from __future__ import annotations
 
@@ -12,11 +13,17 @@ from digest_core.state import (
     Observation,
     Project,
     Todo,
+    _content_id,
     write_projects,
 )
 from digest_web import service
 
 router = APIRouter(prefix="/actions")
+
+
+def _refresh() -> HTMLResponse:
+    """Tell HTMX to reload the page so it shows the new state."""
+    return HTMLResponse("", headers={"HX-Refresh": "true"})
 
 
 def _projects() -> list[Project]:
@@ -42,6 +49,13 @@ def _find_todo(p: Project, tid: str) -> Todo | None:
     return None
 
 
+def _remove_todo(p: Project, tid: str) -> None:
+    p.open_todos = [x for x in p.open_todos if x.id != tid]
+    for task in p.tasks:
+        task.open_todos = [x for x in task.open_todos if x.id != tid]
+
+
+# ── todos ──
 @router.post("/todo/{pid}/{tid}/done", response_class=HTMLResponse)
 def todo_done(pid: str, tid: str) -> HTMLResponse:
     projects = _projects()
@@ -50,9 +64,73 @@ def todo_done(pid: str, tid: str) -> HTMLResponse:
     if t:
         t.done = True  # tombstone — stays closed across re-derivation
         _save(projects)
-    return HTMLResponse('<div class="card muted">✓ done</div>')
+    return _refresh()
 
 
+@router.post("/todo/{pid}/{tid}/delete", response_class=HTMLResponse)
+def todo_delete(pid: str, tid: str) -> HTMLResponse:
+    projects = _projects()
+    p = _project(projects, pid)
+    t = _find_todo(p, tid) if p else None
+    if t:
+        if t.source == "human":
+            _remove_todo(p, tid)  # hers — truly remove; no evidence to resurrect it
+        else:
+            t.done = True  # model todo — tombstone, else the cron re-proposes it
+        _save(projects)
+    return _refresh()
+
+
+@router.post("/todo/{pid}/{tid}/edit", response_class=HTMLResponse)
+def todo_edit(pid: str, tid: str, text: str = Form(...)) -> HTMLResponse:
+    text = text.strip()
+    projects = _projects()
+    p = _project(projects, pid)
+    t = _find_todo(p, tid) if p else None
+    if t and text:
+        t.text = text
+        t.id = _content_id(text)  # id follows the text so later targeting stays correct
+        t.source = "human"  # she owns the wording now; carry-forward won't clobber it
+        _save(projects)
+    return _refresh()
+
+
+def _add_todo(p: Project, text: str) -> None:
+    p.open_todos.append(
+        Todo(
+            text=text,
+            category="self",
+            target=None,
+            due_hint=None,
+            rationale="added by Avigail",
+            source_thread_id=None,
+            source="human",  # protected from carry-forward clobbering
+        )
+    )
+
+
+@router.post("/project/{pid}/todo", response_class=HTMLResponse)
+def add_todo(pid: str, text: str = Form(...)) -> HTMLResponse:
+    projects = _projects()
+    p = _project(projects, pid)
+    if p and text.strip():
+        _add_todo(p, text.strip())
+        _save(projects)
+    return _refresh()
+
+
+@router.post("/todo/add", response_class=HTMLResponse)
+def add_todo_global(project_id: str = Form(...), text: str = Form(...)) -> HTMLResponse:
+    """Add a todo from the cross-project Todos tab (project chosen in the form)."""
+    projects = _projects()
+    p = _project(projects, project_id)
+    if p and text.strip():
+        _add_todo(p, text.strip())
+        _save(projects)
+    return _refresh()
+
+
+# ── project lifecycle + notes ──
 @router.post("/project/{pid}/status", response_class=HTMLResponse)
 def set_status(pid: str, status: str = Form(...)) -> HTMLResponse:
     if status not in PROJECT_STATUSES:
@@ -61,30 +139,20 @@ def set_status(pid: str, status: str = Form(...)) -> HTMLResponse:
     p = _project(projects, pid)
     if p:
         p.status_confirmed = status  # human-confirmed lifecycle (wins over the model)
-        p.status = status  # reflect immediately in the dashboard view
+        p.status = status
         _save(projects)
-    return HTMLResponse("", status_code=204)
+    return _refresh()
 
 
-@router.post("/project/{pid}/todo", response_class=HTMLResponse)
-def add_todo(pid: str, text: str = Form(...)) -> HTMLResponse:
-    text = text.strip()
+@router.post("/project/{pid}/revive", response_class=HTMLResponse)
+def revive(pid: str) -> HTMLResponse:
     projects = _projects()
     p = _project(projects, pid)
-    if p and text:
-        p.open_todos.append(
-            Todo(
-                text=text,
-                category="self",
-                target=None,
-                due_hint=None,
-                rationale="added by Avigail",
-                source_thread_id=None,
-                source="human",  # protected from carry-forward clobbering
-            )
-        )
+    if p:
+        p.status_confirmed = "active"
+        p.status = "active"
         _save(projects)
-    return HTMLResponse("", status_code=204)
+    return _refresh()
 
 
 @router.post("/project/{pid}/note", response_class=HTMLResponse)
@@ -97,7 +165,7 @@ def add_note(pid: str, text: str = Form(...)) -> HTMLResponse:
             Observation(date=service.today(), source="avigail", note=text)
         )
         _save(projects)
-    return HTMLResponse("", status_code=204)
+    return _refresh()
 
 
 @router.post("/project/{pid}/note/{oid}/dismiss", response_class=HTMLResponse)
@@ -109,15 +177,4 @@ def dismiss_note(pid: str, oid: str) -> HTMLResponse:
             if o.id == oid:
                 o.dismissed = True  # tombstone — stays hidden, not re-added
         _save(projects)
-    return HTMLResponse('<div class="card muted">✕ dismissed</div>')
-
-
-@router.post("/project/{pid}/revive", response_class=HTMLResponse)
-def revive(pid: str) -> HTMLResponse:
-    projects = _projects()
-    p = _project(projects, pid)
-    if p:
-        p.status_confirmed = "active"
-        p.status = "active"
-        _save(projects)
-    return HTMLResponse("", status_code=204)
+    return _refresh()

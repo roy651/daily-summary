@@ -35,7 +35,13 @@ def today(request: Request) -> HTMLResponse:
 
 @app.get("/todos", response_class=HTMLResponse)
 def todos(request: Request) -> HTMLResponse:
-    return _page(request, "todos.html", tab="todos", ranked=service.ranked_todos())
+    return _page(
+        request,
+        "todos.html",
+        tab="todos",
+        ranked=service.ranked_todos(),
+        projects=service.active_projects(),
+    )
 
 
 @app.get("/projects", response_class=HTMLResponse)
