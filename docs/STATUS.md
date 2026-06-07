@@ -1,6 +1,12 @@
 # Project Status — daily-summary
 
-_Snapshot: 2026-06-06. Audience: future maintainers + the project owner._
+_Snapshot: 2026-06-08. Audience: future maintainers + the project owner._
+
+> **Now:** Digest reshaped to Avigail's spec + going live. **Phase-2 dashboard (`digest_web/`) is BUILT
+> + tested (196 green)** — view + interact (todo CRUD, status, notes, revive) as tombstones on the
+> single shared state model. **Pending deploy to the mini-pc** (SSH blocked under VSCode → continuing in
+> the CC terminal); the morning cron + first email are gated on that. See `.claude/handoff.md`
+> "ACTIVE WORK" and `docs/08-dashboard.md`. Nothing pushed.
 
 ## Mission (recap)
 

@@ -1,5 +1,44 @@
 # Handoff — daily-summary
 
+## ▶ ACTIVE WORK — pick up here (2026-06-08, continuing in the CC terminal)
+
+**Why the terminal:** VSCode-hosted Claude Code can't reach the mini-pc over SSH; the CC terminal can.
+The whole remaining task is **deploy + schedule on the mini-pc** — the code is done.
+
+**Done this session (all committed locally, NOTHING pushed — Roy gates pushing):**
+- Digest reshaped to Avigail's spec (Updates→Todos→Status→Personal, client+project mini-headers,
+  HTML email, handoff/brevity prompt, cold-sales drop). Verified on real mail.
+- **One-time "June reset"** applied to `state/projects.json` (9 archived, 12 kept incl. 4 billing-based
+  rescues; backups `state/projects.json.bak-*`). Then **all todos cleared** (backup
+  `state/projects.json.bak-todos-*`) — so persisted state has **0 todos** until the first REAL run
+  re-derives + persists them. (This is why the Todos tab is empty while the digest shows todos: every
+  run since the clear was `--dry-run`, which doesn't persist.)
+- **🐞 Fixed a cron-killer**: a free-text `due_hint` ("next 1-2 days") crashed `date.fromisoformat`.
+- **Dashboard v1 (2a+2b) BUILT + tested** (`digest_web/`, 196 green): Today/Todos/Projects/Contacts/
+  Knowledge/Clients + full **todo CRUD** (add/edit/delete/done), status change, add/dismiss note,
+  revive — all **tombstones on the single shared state model** (atomic writes; agent fields untouched,
+  enforced by tests). Run locally: `uv run uvicorn digest_web.app:app --port 8080`.
+- **Deploy kit** in `deploy/` (`DEPLOY.md`, `run-daily.sh`, `crontab.snippet` = 07:00 Israel Sun–Fri,
+  `daily-summary-web.service`, `mac-fallback.plist`). Email auto-links to the dashboard when
+  `DASHBOARD_URL` is set.
+
+**NOT done (do in the terminal):**
+1. **SSH-deploy to the mini-pc** (`roy650@192.168.1.17`) — follow `deploy/DEPLOY.md`. Copy the working
+   tree + `.env`; `uv sync --extra web`; **carry over this Mac's `state/`** for continuity (June reset +
+   the cleared-todos slate live there); seed/verify watermarks; install the cron + the web service; set
+   `DASHBOARD_URL=http://<mini-pc>:8080`.
+2. **The first email** must come from the **scheduled 7 AM job** (Roy: "we don't need today's"). A
+   manual send was correctly blocked. Don't send manually — let the cron fire, OR use the Mac fallback
+   plist if the mini-pc can't be ready in time.
+3. Verify: on the mini-pc run `daily --dry-run`, eyeball `out/digest_*.md`, then let the cron send.
+4. Small follow-ups: the **"Run now"** dashboard button (approved, not built); filter **dismissed
+   observations** out of the model packet (minor; render already hides them).
+
+**State facts:** watermarks on this Mac — `ula`=2026-06-03, `gmail`=2026-06-07T10:15Z. SMTP/IMAP creds
+in git-ignored `.env`. `DELIVERY=email`, `REASONER=code`, `DIGEST_EMAIL_TO=avigail@ula.co.il`.
+
+---
+
 **The product is built** (Phase 1 complete, feedback loop closed — see `docs/STATUS.md` for the
 zoom-out and `docs/06-build-plan.md` for the current phase). This file is the durable orientation to
 the **shared `mail-evidence` foundation** and why this is its own repo. For how the system works
