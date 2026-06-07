@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block subtitle %}{{ projects|length }} active{% endblock %}
+{% block content %}
+<h2>🗂 Projects</h2>
+{% for p in projects %}
+<div class="card"><div class="row">
+  <div>
+    <a class="proj" href="/projects/{{ p.project_id }}">{{ p.client_id }}{% if p.end_client %} / {{ p.end_client }}{% endif %} — {{ p.title }}</a>
+    {% if p.status_reason %}<div class="muted">{{ p.status_reason }}</div>{% endif %}
+  </div>
+  <span class="pill {{ p.status }}">{{ p.status }}</span>
+</div></div>
+{% endfor %}
+{% if archived %}
+<h3>archived ({{ archived|length }})</h3>
+{% for p in archived %}
+<div class="row" style="padding:3px 4px">
+  <a class="proj" href="/projects/{{ p.project_id }}" style="font-weight:400;color:#777">{{ p.client_id }} — {{ p.title }}</a>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

@@ -28,6 +28,16 @@ _FEEDBACK_HINT = (
     "`archive: <project>`, `suppress: <thread>`, or just tell me in plain words._\n"
 )
 
+
+def _dashboard_link(url: str) -> str:
+    """A link to Avigail's dashboard, appended to the email when DASHBOARD_URL is set (post-deploy)."""
+    return (
+        f"\n\n**[→ Open your dashboard]({url})** — review & manage todos, projects and notes.\n"
+        if url
+        else ""
+    )
+
+
 _EMAIL_CSS = (
     "body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;"
     "font-size:14px;line-height:1.5;color:#222;max-width:720px;margin:0 auto;padding:8px}"
@@ -88,6 +98,7 @@ class EmailDelivery:
         user: str,
         password: str,
         dry_run: bool = True,
+        dashboard_url: str = "",
     ) -> None:
         if not to:
             raise ValueError("EmailDelivery requires a recipient (DIGEST_EMAIL_TO)")
@@ -97,6 +108,7 @@ class EmailDelivery:
         self.user = user
         self.password = password
         self.dry_run = dry_run
+        self.dashboard_url = dashboard_url
 
     def deliver(
         self,
@@ -124,7 +136,8 @@ class EmailDelivery:
         # Email is for READING — send the digest itself (it already has the Todos section) plus a short
         # reply-feedback hint, NOT the editable todos file (its `# archive:` template would render as
         # giant H1s in HTML, and it's redundant here). The file backend keeps the editable todos.md.
-        self._send_smtp(recipient, subject, digest_md + _FEEDBACK_HINT)
+        body = digest_md + _dashboard_link(self.dashboard_url) + _FEEDBACK_HINT
+        self._send_smtp(recipient, subject, body)
         return DeliveryResult(backend="email", sent=True, detail=f"sent to {recipient}")
 
     def _send_smtp(self, recipient: str, subject: str, body_md: str) -> None:
@@ -184,5 +197,6 @@ def select_delivery(
             user=env.get("SMTP_USER", ""),
             password=env.get("SMTP_APP_PASSWORD", ""),
             dry_run=dry_run,
+            dashboard_url=env.get("DASHBOARD_URL", ""),
         )
     return FileDelivery(out_dir=out_dir)

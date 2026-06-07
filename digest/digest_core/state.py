@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -336,8 +338,17 @@ class ClientProfile:
 def _dump(items: list[Any], path: str | Path) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    text = json.dumps([asdict(i) for i in items], indent=2, ensure_ascii=False)
-    p.write_text(text + "\n", encoding="utf-8")
+    text = json.dumps([asdict(i) for i in items], indent=2, ensure_ascii=False) + "\n"
+    # Atomic write (temp in the same dir + os.replace) so the cron and the dashboard — the two writers
+    # of the single shared model — can never read a half-written file (docs/08).
+    fd, tmp = tempfile.mkstemp(dir=p.parent, prefix=f".{p.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, p)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def _load(path: str | Path) -> list[dict[str, Any]]:

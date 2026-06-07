@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block subtitle %}{{ ranked|length }} open{% endblock %}
+{% block content %}
+<h2>✅ Todos</h2>
+{% if not ranked %}<p class="muted">Nothing queued.</p>{% endif %}
+{% for band in ['urgent','soon','whenever'] %}
+  {% set group = ranked | selectattr('band','equalto',band) | list %}
+  {% if group %}
+  <h3>{{ band }}</h3>
+  {% for r in group %}
+  <div class="card" id="todo-{{ r.todo.id }}">
+    <div class="row">
+      <div>
+        <strong>{{ r.client_id }}{% if r.end_client %} / {{ r.end_client }}{% endif %}</strong>
+        · <span class="tag">{{ r.todo.category }}</span>
+        {% if r.todo.source == 'human' %}<span class="tag">yours</span>{% endif %}
+        <br>{{ r.todo.text }}{% if r.todo.target %}<span class="muted"> → {{ r.todo.target }}</span>{% endif %}
+      </div>
+      <form class="inline" hx-post="/actions/todo/{{ r.project_id }}/{{ r.todo.id }}/done"
+            hx-target="#todo-{{ r.todo.id }}" hx-swap="outerHTML">
+        <button title="mark done">✓ done</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+{% endfor %}
+{% endblock %}

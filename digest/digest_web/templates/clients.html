@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>🏢 Clients</h2>
+{% for c in clients %}
+<div class="card">
+  <div class="row"><strong>{{ c.display_name }}</strong>
+    {% if c.is_agency %}<span class="tag">agency</span>{% endif %}</div>
+  {% for m in c.managing_contacts %}<div class="muted">{{ m.name }} — {{ m.email }}{% if m.role_note %} ({{ m.role_note }}){% endif %}</div>{% endfor %}
+</div>
+{% endfor %}
+{% if not clients %}<p class="muted">No clients yet.</p>{% endif %}
+{% endblock %}

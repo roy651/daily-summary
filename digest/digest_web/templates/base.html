@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ula — daily</title>
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+<style>
+  :root { --ink:#222; --muted:#777; --line:#eee; --accent:#1a7a4c; --bg:#fafafa; }
+  * { box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif; color:var(--ink);
+         background:var(--bg); margin:0; line-height:1.5; }
+  header { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); z-index:10; }
+  .bar { max-width:860px; margin:0 auto; padding:10px 16px; display:flex; align-items:baseline; gap:10px; }
+  .bar h1 { font-size:18px; margin:0; } .bar h1 span { color:var(--muted); font-weight:400; }
+  nav { max-width:860px; margin:0 auto; padding:0 10px 4px; display:flex; gap:4px; overflow-x:auto; }
+  nav a { padding:7px 12px; border-radius:8px 8px 0 0; text-decoration:none; color:var(--muted);
+          white-space:nowrap; font-size:14px; }
+  nav a.on { color:var(--accent); font-weight:600; background:var(--bg); border-bottom:2px solid var(--accent); }
+  main { max-width:860px; margin:0 auto; padding:16px; }
+  h2 { font-size:17px; border-bottom:1px solid var(--line); padding-bottom:4px; margin:22px 0 10px; }
+  h3 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:14px 0 6px; }
+  h4 { font-size:14px; color:var(--accent); margin:14px 0 4px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin:8px 0; }
+  .row { display:flex; gap:8px; align-items:flex-start; justify-content:space-between; }
+  .muted { color:var(--muted); font-size:13px; }
+  .tag { font-size:11px; background:#f0f0f0; color:#555; padding:1px 7px; border-radius:20px; }
+  .pill { font-size:11px; padding:1px 8px; border-radius:20px; }
+  .pill.active{background:#e6f5ec;color:#1a7a4c;} .pill.blocked{background:#fdecea;color:#b3261e;}
+  .pill.on_hold{background:#fff4e5;color:#9a6700;} .pill.done,.pill.archived{background:#eee;color:#777;}
+  a.proj { color:var(--ink); text-decoration:none; font-weight:600; }
+  a.proj:hover { text-decoration:underline; }
+  button { font:inherit; font-size:13px; padding:4px 10px; border:1px solid var(--line); border-radius:7px;
+           background:#fff; cursor:pointer; } button:hover { background:#f4f4f4; }
+  form.inline { display:inline; }
+  code { background:#f4f4f4; padding:1px 5px; border-radius:4px; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar"><h1>ula <span>· daily</span></h1>
+    <span class="muted">{% block subtitle %}{% endblock %}</span></div>
+  <nav>
+    <a href="/"          class="{{ 'on' if tab=='today' }}">📬 Today</a>
+    <a href="/todos"     class="{{ 'on' if tab=='todos' }}">✅ Todos</a>
+    <a href="/projects"  class="{{ 'on' if tab=='projects' }}">🗂 Projects</a>
+    <a href="/contacts"  class="{{ 'on' if tab=='contacts' }}">👥 Contacts</a>
+    <a href="/knowledge" class="{{ 'on' if tab=='knowledge' }}">📚 Knowledge</a>
+    <a href="/clients"   class="{{ 'on' if tab=='clients' }}">🏢 Clients</a>
+  </nav>
+</header>
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>

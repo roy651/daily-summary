@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>👥 Contacts &amp; roles</h2>
+{% for role, people in by_role.items() %}
+<h3>{{ role }} ({{ people|length }})</h3>
+{% for email, e in people %}
+<div class="card"><div class="row">
+  <div><strong>{{ email }}</strong>{% if e.reason %}<span class="muted"> — {{ e.reason }}</span>{% endif %}</div>
+  <span class="tag">{{ e.source }}</span>
+</div></div>
+{% endfor %}
+{% endfor %}
+{% if not by_role %}<p class="muted">No contacts yet.</p>{% endif %}
+{% endblock %}

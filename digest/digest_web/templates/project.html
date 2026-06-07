@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block subtitle %}{{ p.title }}{% endblock %}
+{% block content %}
+<p><a href="/projects">← projects</a></p>
+<h2>{{ p.client_id }}{% if p.end_client %} / {{ p.end_client }}{% endif %} — {{ p.title }}
+  <span class="pill {{ p.status }}">{{ p.status }}</span></h2>
+{% if p.status_reason %}<p class="muted">{{ p.status_reason }}</p>{% endif %}
+
+<div class="row">
+  <h3 style="margin-top:6px">Status</h3>
+  <form class="inline" hx-post="/actions/project/{{ p.project_id }}/status" hx-swap="none">
+    <select name="status">
+      {% for s in ['active','on_hold','blocked','done','archived'] %}
+      <option value="{{ s }}" {{ 'selected' if p.status==s }}>{{ s }}</option>{% endfor %}
+    </select>
+    <button>set</button>
+  </form>
+</div>
+
+<h3>Todos</h3>
+{% set live = p.open_todos | rejectattr('done') | list %}
+{% if not live %}<p class="muted">none</p>{% endif %}
+{% for t in live %}
+<div class="card" id="todo-{{ t.id }}"><div class="row">
+  <div>{{ t.text }}{% if t.target %}<span class="muted"> → {{ t.target }}</span>{% endif %}
+    {% if t.source=='human' %}<span class="tag">yours</span>{% endif %}</div>
+  <form class="inline" hx-post="/actions/todo/{{ p.project_id }}/{{ t.id }}/done"
+        hx-target="#todo-{{ t.id }}" hx-swap="outerHTML"><button>✓ done</button></form>
+</div></div>
+{% endfor %}
+<form class="card" hx-post="/actions/project/{{ p.project_id }}/todo" hx-target="this" hx-swap="none">
+  <input name="text" placeholder="add a todo…" style="width:70%;padding:5px">
+  <button>add</button>
+</form>
+
+<h3>Notes</h3>
+{% set notes = p.observations | rejectattr('dismissed') | list %}
+{% if not notes %}<p class="muted">none</p>{% endif %}
+{% for o in notes %}
+<div class="card" id="note-{{ o.id }}"><div class="row">
+  <div><span class="muted">{{ o.date }}</span> — {{ o.note }}</div>
+  <form class="inline" hx-post="/actions/project/{{ p.project_id }}/note/{{ o.id }}/dismiss"
+        hx-target="#note-{{ o.id }}" hx-swap="outerHTML"><button title="dismiss">✕</button></form>
+</div></div>
+{% endfor %}
+<form class="card" hx-post="/actions/project/{{ p.project_id }}/note" hx-target="this" hx-swap="none">
+  <input name="text" placeholder="add a note…" style="width:70%;padding:5px">
+  <button>add</button>
+</form>
+{% endblock %}

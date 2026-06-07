@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block subtitle %}{{ run_date or "no digest yet" }}{% endblock %}
+{% block content %}{{ digest_html | safe }}{% endblock %}

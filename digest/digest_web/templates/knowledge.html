@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>📚 Knowledge</h2>
+<p class="muted">What the system has learned about how you work — facts it reuses every day.</p>
+{% for n in notes %}<div class="card">{{ n }}</div>{% endfor %}
+{% if not notes %}<p class="muted">Nothing yet.</p>{% endif %}
+{% endblock %}
