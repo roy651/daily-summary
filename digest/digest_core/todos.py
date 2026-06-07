@@ -58,7 +58,12 @@ class RankedTodo:
 def _days_between(start_iso: str | None, end_iso: str | None) -> int | None:
     if not start_iso or not end_iso:
         return None
-    return (date.fromisoformat(end_iso) - date.fromisoformat(start_iso)).days
+    try:
+        return (date.fromisoformat(end_iso) - date.fromisoformat(start_iso)).days
+    except ValueError:
+        # A model due_hint is a soft, free-text guess ("next 1-2 days") — not always an ISO date.
+        # Treat an unparseable date as no computable deadline pressure rather than crashing the run.
+        return None
 
 
 def _score(

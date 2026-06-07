@@ -75,3 +75,17 @@ def test_observation_dismissed_round_trips():
         }
     )
     assert o.dismissed is True and o.id == _content_id("X is dormant")
+
+
+def test_freetext_due_hint_does_not_crash_ranking():
+    # Regression: a model due_hint like "next 1-2 days" is not an ISO date; it must not crash the run.
+    from digest_core.state import Project
+
+    p = Project(
+        project_id="p1",
+        client_id="c",
+        title="t",
+        open_todos=[_todo("do it", due_hint="next 1-2 days")],
+    )
+    ranked = prioritize([p], run_date="2026-06-08")  # must not raise
+    assert any(r.todo.text == "do it" for r in ranked)
