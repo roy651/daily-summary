@@ -1,0 +1,5 @@
+# daily-summary — morning digest at 07:00 Israel time, 6 days/week (Sun–Fri; never Saturday).
+# Install with:  crontab -e   (paste these two lines; adjust the path)
+# CRON_TZ makes the 07:00 Israel-local and DST-correct regardless of the box's own timezone.
+CRON_TZ=Asia/Jerusalem
+0 7 * * 0-5 /home/roy650/daily-summary/deploy/run-daily.sh

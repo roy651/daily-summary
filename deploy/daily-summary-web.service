@@ -1,0 +1,18 @@
+# systemd unit for the dashboard (FastAPI/Uvicorn). Install:
+#   sudo cp deploy/daily-summary-web.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now daily-summary-web
+# Then Avigail opens http://<mini-pc-ip>:8080  (no auth — LAN only).
+[Unit]
+Description=daily-summary dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=roy650
+WorkingDirectory=/home/roy650/daily-summary
+ExecStart=/home/roy650/.local/bin/uv run uvicorn digest_web.app:app --host 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
