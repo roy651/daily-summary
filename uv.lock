@@ -125,7 +125,7 @@ requires-dist = [
     { name = "anthropic", marker = "extra == 'api'", specifier = ">=0.40" },
     { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.110" },
     { name = "jinja2", marker = "extra == 'web'", specifier = ">=3.1" },
-    { name = "mail-evidence", editable = "../private/invoicing-assistant/skills/mail-evidence" },
+    { name = "mail-evidence", editable = "../invoicing-assistant/skills/mail-evidence" },
     { name = "markdown", specifier = ">=3.5" },
     { name = "openai", marker = "extra == 'api'", specifier = ">=1.40" },
     { name = "python-dotenv", specifier = ">=1.0" },
@@ -414,7 +414,7 @@ wheels = [
 [[package]]
 name = "mail-evidence"
 version = "0.1.0"
-source = { editable = "../private/invoicing-assistant/skills/mail-evidence" }
+source = { editable = "../invoicing-assistant/skills/mail-evidence" }
 dependencies = [
     { name = "imapclient" },
     { name = "python-dotenv" },

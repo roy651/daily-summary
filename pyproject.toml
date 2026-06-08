@@ -39,7 +39,7 @@ dev = [
 # Designing toward extracting it to a standalone shared lib; when that happens, only
 # this source entry changes. NEVER add a daily-summary import into mail-evidence.
 [tool.uv.sources]
-mail-evidence = { path = "../private/invoicing-assistant/skills/mail-evidence", editable = true }
+mail-evidence = { path = "../invoicing-assistant/skills/mail-evidence", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["digest/tests"]
