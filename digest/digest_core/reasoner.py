@@ -180,6 +180,13 @@ _REASONER_SYSTEM = (
     "and cite the responsible thread ids in evidence_thread_ids. Do NOT re-state quiet/unchanged "
     "projects — they carry forward automatically and their silence is what lets them age to dormant. "
     "Activity is dated from the cited in-window evidence, never from merely mentioning a project.\n"
+    "- TODOS ARE THE DELIVERABLE: the digest's core output is Avigail's prioritized to-do list. For "
+    "EVERY project_update whose activity implies an action on Avigail's side — review/finalize/deliver a "
+    "handoff, reply to or chase a client/subcontractor, source or fix an asset, attend a meeting/"
+    "walkthrough (with its date/time) — you MUST emit at least one concrete `todo` on that "
+    "project_update: a specific NEXT action, not a restatement of the update. A digest_update that "
+    "describes something Avigail must do, with NO matching todo, is an error. Only omit a todo when the "
+    "project genuinely needs nothing from her right now.\n"
     "- HANDOFF: when a subcontractor (e.g. Nurit, Idan) hands work BACK to Avigail — delivers a revised "
     "file/asset for her to take over — the key todo is Avigail's concrete NEXT action (review it, "
     "finalize it, deliver it to the client), emitted as a 'self' todo. Don't reduce a handoff to only the "
@@ -212,6 +219,10 @@ _REASONER_SYSTEM = (
     "'entity' when you make a NEW or AMBIGUOUS person/role call you'd want Avigail to "
     "confirm (e.g. first time treating an address as a subcontractor, or two addresses that may be the "
     "same person); 'unplaced' (default) for a business thread you couldn't attach to a project.\n"
+    "- REQUIRED FIELDS — include on EVERY such object, never omit, and emit [] (never null) for an "
+    "empty list: digest_update -> headline AND importance; project_update -> project_id (or, for a NEW "
+    "project, client_id AND title); todo -> text AND category; blocker -> kind, description, since; "
+    "insight -> scope AND note; unresolved -> thread_id; correction -> kind.\n"
     "- Allowed enums: status active|on_hold|blocked|done|archived; todo category self|"
     "verify_subcontractor|communicate_client; confidence/importance high|med|low; deadline_kind "
     "hard|soft. Follow the packet's glossary for entity/role specifics."
@@ -320,7 +331,7 @@ class CodeReasoner:
             self.output_path.unlink(
                 missing_ok=True
             )  # never consume a stale prior output
-            self._runner(self._prompt(retry=attempt > 0))
+            self._runner(self._prompt(error=last_err if attempt > 0 else None))
             if not self.output_path.exists():
                 last_err = f"`claude` produced no {self.output_path.name}"
                 continue
@@ -337,11 +348,11 @@ class CodeReasoner:
             "Check that claude is logged in and allowed Read,Write."
         )
 
-    def _prompt(self, *, retry: bool = False) -> str:
+    def _prompt(self, *, error: str | None = None) -> str:
         retry_hint = (
-            "Your previous attempt did not write a single valid JSON object — write ONLY the JSON, no "
-            "prose, no code fence, no markdown. "
-            if retry
+            f"Your previous attempt was REJECTED: {error}. Fix exactly that — write ONLY the JSON "
+            "object (no prose, no code fence, no markdown) and include every REQUIRED field. "
+            if error
             else ""
         )
         return (

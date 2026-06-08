@@ -138,6 +138,35 @@ def test_blockers_omitted_is_none_present_is_list():
     )
 
 
+def test_null_optional_lists_tolerated():
+    # A model may emit `"field": null` for an optional list instead of omitting it. That must not
+    # crash the day's digest: null is treated as absent. For list-default fields null -> []; for
+    # blockers (None = "keep existing", [] = "clear") null maps to None, same as absent.
+    out = ModelOutput.from_dict(
+        {
+            "project_updates": [
+                _minimal_update(
+                    evidence_thread_ids=None,
+                    todos=None,
+                    closed_todos=None,
+                    observations=None,
+                    blockers=None,
+                )
+            ],
+            "digest_updates": None,
+            "unresolved": None,
+            "insights": None,
+            "corrections": None,
+        }
+    )
+    pu = out.project_updates[0]
+    assert pu.blockers is None  # null == absent == keep existing (not a crash)
+    assert pu.todos == [] and pu.evidence_thread_ids == []
+    assert pu.closed_todos == [] and pu.observations == []
+    assert out.digest_updates == [] and out.unresolved == []
+    assert out.insights == [] and out.corrections == []
+
+
 def test_empty_output_is_valid():
     out = ModelOutput.from_dict({})
     assert (

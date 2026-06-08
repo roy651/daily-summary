@@ -83,6 +83,45 @@ def test_code_reasoner_errors_when_no_output_written(tmp_path):
         r.reason({"run_date": RUN})
 
 
+def test_code_reasoner_retry_feeds_back_validation_error(tmp_path):
+    # A first attempt that omits a required field must not lose the day: the retry reprompt has to
+    # name the specific failure so the model can fix exactly that, then succeed on the second pass.
+    output_path = tmp_path / "model_output.json"
+    prompts: list[str] = []
+
+    def fake_runner(prompt):
+        prompts.append(prompt)
+        if (
+            len(prompts) == 1
+        ):  # first attempt: digest_update missing required 'headline'
+            output_path.write_text(
+                json.dumps(
+                    {
+                        "project_updates": [],
+                        "digest_updates": [{"importance": "high"}],
+                        "unresolved": [],
+                        "insights": [],
+                        "generated_at": RUN,
+                    }
+                )
+            )
+        else:  # corrected retry
+            output_path.write_text(json.dumps({**OUT, "generated_at": RUN}))
+
+    r = CodeReasoner(
+        packet_path=tmp_path / "packet.json",
+        output_path=output_path,
+        run_date=RUN,
+        runner=fake_runner,
+    )
+    out = r.reason({"run_date": RUN})
+    assert (
+        out.digest_updates[0].headline == "Something happened"
+    )  # 2nd attempt consumed
+    assert len(prompts) == 2
+    assert "headline" in prompts[1]  # the retry names the specific validation failure
+
+
 def test_code_reasoner_rejects_wrong_day_stamp(tmp_path):
     output_path = tmp_path / "model_output.json"
     r = CodeReasoner(

@@ -67,22 +67,27 @@ class ProjectUpdate:
         if confidence is not None:
             _check(confidence, CONFIDENCES, "confidence")
         _check_optional(d.get("deadline_kind"), DEADLINE_KINDS, "deadline_kind")
+        # None/absent => keep existing blockers; [] => explicitly clear (F6). A model may emit
+        # `"blockers": null` for "none to set" — treat that as absent, not a crash.
+        blockers_raw = d.get("blockers")
         blockers = (
-            [Blocker.from_dict(b) for b in d["blockers"]] if "blockers" in d else None
+            [Blocker.from_dict(b) for b in blockers_raw]
+            if blockers_raw is not None
+            else None
         )
         return cls(
             project_id=project_id,
             status_agent=status_agent,
             status_evidence=d.get("status_evidence", ""),
             confidence=confidence,
-            evidence_thread_ids=list(d.get("evidence_thread_ids", [])),
+            evidence_thread_ids=list(d.get("evidence_thread_ids") or []),
             blockers=blockers,
-            todos=[Todo.from_dict(t) for t in d.get("todos", [])],
-            closed_todos=list(d.get("closed_todos", [])),
+            todos=[Todo.from_dict(t) for t in (d.get("todos") or [])],
+            closed_todos=list(d.get("closed_todos") or []),
             deadline=d.get("deadline"),
             deadline_kind=d.get("deadline_kind"),
             billed=bool(d.get("billed", False)),
-            observations=list(d.get("observations", [])),
+            observations=list(d.get("observations") or []),
             client_id=d.get("client_id"),
             end_client=d.get("end_client"),
             title=d.get("title"),
@@ -158,7 +163,7 @@ class Correction:
             kind=kind,
             match=d.get("match", ""),
             note=d.get("note", ""),
-            emails=list(d.get("emails", [])),
+            emails=list(d.get("emails") or []),
             role=d.get("role"),
         )
 
@@ -192,12 +197,12 @@ class ModelOutput:
         return cls(
             generated_at=d.get("generated_at"),
             project_updates=[
-                ProjectUpdate.from_dict(p) for p in d.get("project_updates", [])
+                ProjectUpdate.from_dict(p) for p in (d.get("project_updates") or [])
             ],
             digest_updates=[
-                DigestUpdate.from_dict(u) for u in d.get("digest_updates", [])
+                DigestUpdate.from_dict(u) for u in (d.get("digest_updates") or [])
             ],
-            unresolved=[Unresolved.from_dict(u) for u in d.get("unresolved", [])],
-            insights=[Insight.from_dict(i) for i in d.get("insights", [])],
-            corrections=[Correction.from_dict(c) for c in d.get("corrections", [])],
+            unresolved=[Unresolved.from_dict(u) for u in (d.get("unresolved") or [])],
+            insights=[Insight.from_dict(i) for i in (d.get("insights") or [])],
+            corrections=[Correction.from_dict(c) for c in (d.get("corrections") or [])],
         )
