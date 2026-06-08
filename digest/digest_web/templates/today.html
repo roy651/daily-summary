@@ -1,3 +1,9 @@
 {% extends "base.html" %}
 {% block subtitle %}{{ run_date or "no digest yet" }}{% endblock %}
-{% block content %}{{ digest_html | safe }}{% endblock %}
+{% block content %}
+<div style="margin:0 0 14px;">
+  <button id="rerun" hx-post="/actions/run-now" hx-target="#rerun" hx-swap="outerHTML">🔄 Re-run digest</button>
+  <span class="muted">— pull the latest mail &amp; regenerate (no email sent)</span>
+</div>
+{{ digest_html | safe }}
+{% endblock %}

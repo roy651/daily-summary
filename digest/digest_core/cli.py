@@ -188,7 +188,11 @@ def _cmd_daily(args, env: Mapping[str, str]) -> int:
     reasoner = select_reasoner(
         env, work_dir=state_dir, run_date=run_date, replay_path=env.get("REPLAY_OUTPUT")
     )
-    delivery = select_delivery(env, out_dir=out_dir, dry_run=args.dry_run)
+    # --no-send (dashboard refresh): suppress the email like a dry-run, but still persist state below
+    # so the dashboard's todos/projects update. Watermark won't advance (delivery.sent stays False).
+    delivery = select_delivery(
+        env, out_dir=out_dir, dry_run=args.dry_run or args.no_send
+    )
     try:
         result = run_digest(
             projects=projects,
@@ -385,6 +389,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="upper-bound (exclusive) date filter for --from-export (YYYY-MM-DD)",
     )
     d.add_argument("--dry-run", action="store_true")
+    d.add_argument(
+        "--no-send",
+        action="store_true",
+        help="on-demand refresh: pull + reason + persist state + write the digest, but do NOT email "
+        "and do NOT advance the watermark (the dashboard 'Re-run' button)",
+    )
     d.set_defaults(func=_cmd_daily)
 
     f = sub.add_parser(

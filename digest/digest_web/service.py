@@ -7,6 +7,7 @@ from __future__ import annotations
 import datetime
 import os
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import markdown
 
@@ -19,6 +20,8 @@ from digest_core.state import (
     load_projects,
 )
 from digest_core.todos import RankedTodo, prioritize
+
+_ISRAEL = ZoneInfo("Asia/Jerusalem")
 
 
 def state_dir() -> Path:
@@ -67,6 +70,16 @@ def project(project_id: str) -> Project | None:
 
 def ranked_todos(run_date: str | None = None) -> list[RankedTodo]:
     return prioritize(active_projects(), run_date=run_date or today())
+
+
+def last_run_at() -> str | None:
+    """When the most recent digest was generated, as Israel-local 'Mon 08 Jun, 07:00' — the mtime of
+    the newest out/digest_*.md (what the cron/run writes at the end of a run). None if none yet."""
+    files = sorted(out_dir().glob("digest_*.md"))
+    if not files:
+        return None
+    ts = datetime.datetime.fromtimestamp(files[-1].stat().st_mtime, tz=_ISRAEL)
+    return ts.strftime("%a %d %b, %H:%M")
 
 
 def latest_digest() -> tuple[str | None, str]:

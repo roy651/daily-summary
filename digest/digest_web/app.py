@@ -13,15 +13,19 @@ try:  # fastapi re-exports starlette's templating
 except Exception:  # pragma: no cover
     from starlette.templating import Jinja2Templates
 
-from digest_web import actions, service
+from digest_web import actions, rerun, service
 
 app = FastAPI(title="ula — Avigail's dashboard")
 app.include_router(actions.router)
+app.include_router(rerun.router)
 _TPL = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
 def _page(request: Request, name: str, **ctx) -> HTMLResponse:
     # Starlette's current signature is (request, name, context).
+    ctx.setdefault(
+        "last_run", service.last_run_at()
+    )  # shown in the header on every page
     return _TPL.TemplateResponse(request, name, ctx)
 
 

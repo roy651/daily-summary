@@ -61,6 +61,42 @@ def test_read_only_pages_render(ctx):
         assert client.get(tab).status_code == 200
 
 
+def test_last_run_shown_in_header(ctx):
+    # The header tells Avigail when the digest was last generated, in Israel time.
+    body = ctx[0].get("/").text
+    assert "Last run" in body and "(Israel)" in body
+
+
+def test_rerun_button_on_today_page(ctx):
+    assert "/actions/run-now" in ctx[0].get("/").text  # the Re-run control is present
+
+
+def test_rerun_runs_then_refreshes(ctx, monkeypatch):
+    # POST starts the (here: instantaneous, synchronous) run and shows a spinner; once it succeeds the
+    # status poll returns HX-Refresh so the page reloads to the fresh digest.
+    from digest_web import rerun
+
+    monkeypatch.setattr(rerun, "_invoke_cli", lambda: (True, ""))
+    monkeypatch.setattr(rerun, "_start", rerun._worker)  # run synchronously, no thread
+    client = ctx[0]
+    started = client.post("/actions/run-now")
+    assert "Re-running" in started.text
+    status = client.get("/actions/run-now/status")
+    assert status.headers.get("HX-Refresh") == "true"
+
+
+def test_rerun_failure_restores_button(ctx, monkeypatch):
+    from digest_web import rerun
+
+    monkeypatch.setattr(rerun, "_invoke_cli", lambda: (False, "boom"))
+    monkeypatch.setattr(rerun, "_start", rerun._worker)
+    client = ctx[0]
+    client.post("/actions/run-now")
+    status = client.get("/actions/run-now/status")
+    assert status.headers.get("HX-Refresh") is None
+    assert "run failed" in status.text and "/actions/run-now" in status.text
+
+
 def test_close_todo_writes_done_tombstone_not_agent_fields(ctx):
     client, state, tid, _ = ctx
     assert client.post(f"/actions/todo/p1/{tid}/done").status_code == 200

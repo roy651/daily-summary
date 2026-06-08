@@ -39,7 +39,9 @@
 <body>
 <header>
   <div class="bar"><h1>ula <span>· daily</span></h1>
-    <span class="muted">{% block subtitle %}{% endblock %}</span></div>
+    <span class="muted">{% block subtitle %}{% endblock %}</span>
+    <span class="muted" style="margin-left:auto; white-space:nowrap;">
+      {% if last_run %}🕗 Last run {{ last_run }} (Israel){% else %}🕗 No run yet{% endif %}</span></div>
   <nav>
     <a href="/"          class="{{ 'on' if tab=='today' }}">📬 Today</a>
     <a href="/todos"     class="{{ 'on' if tab=='todos' }}">✅ Todos</a>

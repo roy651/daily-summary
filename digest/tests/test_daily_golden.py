@@ -92,6 +92,48 @@ def test_existing_project_blocked_and_confirmed_untouched(tmp_path):
     )  # guard: human column never written by apply
 
 
+def test_no_send_persists_and_writes_digest_without_emailing(tmp_path):
+    # The dashboard 'Re-run' path (--no-send): pull + reason + PERSIST + write the digest, but suppress
+    # the email. Unlike --dry-run, state IS persisted so the dashboard tabs update. DELIVERY=email yet
+    # no SMTP is configured — the run still succeeds, proving no send was attempted.
+    state_dir = tmp_path / "state"
+    out_dir = tmp_path / "out"
+    shutil.copytree(FIX / "state", state_dir)
+    env = {
+        "REASONER": "replay",
+        "REPLAY_OUTPUT": str(FIX / "model_output_daily.json"),
+        "DELIVERY": "email",
+        "DIGEST_EMAIL_TO": "avigail@ula.example",
+        "IMAP_USER": "avigail@ula.example",
+    }
+    code = cli.main(
+        [
+            "daily",
+            "--from-export",
+            str(FIX / "emails"),
+            "--state-dir",
+            str(state_dir),
+            "--out-dir",
+            str(out_dir),
+            "--as-of",
+            "2026-06-05",
+            "--no-send",
+        ],
+        env=env,
+    )
+    assert code == 0
+    assert (
+        out_dir / "digest_2026-06-05.md"
+    ).exists()  # digest produced for the dashboard
+    # State persisted (unlike --dry-run): the existing project advances from evidence.
+    homepage = next(
+        p
+        for p in load_projects(state_dir / "projects.json")
+        if p.project_id == "p-sprig-homepage"
+    )
+    assert homepage.status_agent == "blocked"
+
+
 def test_dry_run_does_not_persist(tmp_path):
     state_dir = tmp_path / "state"
     out_dir = tmp_path / "out"
