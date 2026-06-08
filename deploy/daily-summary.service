@@ -1,0 +1,16 @@
+# systemd USER service — the morning digest run, invoked by daily-summary.timer.
+# Installed as a *user* service (no sudo); linger keeps it running with no active login.
+#   loginctl enable-linger "$USER"        # once, if not already enabled
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/daily-summary.service deploy/daily-summary.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now daily-summary.timer
+[Unit]
+Description=daily-summary morning digest (run-daily.sh)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/daily-summary
+# run-daily.sh shells out to `uv`; the reasoner shells out to `claude` — both live in ~/.local/bin,
+# which a systemd user service does not put on PATH by default.
+Environment=PATH=%h/.local/bin:/usr/bin:/bin
+ExecStart=%h/daily-summary/deploy/run-daily.sh

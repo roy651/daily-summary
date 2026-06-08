@@ -1,0 +1,14 @@
+# 07:00 Israel time, Sun–Fri (never Saturday), DST-correct.
+#
+# IMPORTANT: this is a systemd timer, NOT cron. Debian/Ubuntu's cron silently IGNORES `CRON_TZ`, so a
+# `CRON_TZ=Asia/Jerusalem` + `0 7 …` crontab actually fires at 07:00 in the box's own timezone (UTC
+# here = 10:00 Israel), never 07:00 Israel. systemd's OnCalendar honors the timezone suffix and DST.
+[Unit]
+Description=daily-summary digest at 07:00 Israel time, Sun-Fri (never Saturday)
+
+[Timer]
+OnCalendar=Sun,Mon,Tue,Wed,Thu,Fri 07:00 Asia/Jerusalem
+Persistent=true
+
+[Install]
+WantedBy=timers.target
